@@ -613,6 +613,7 @@ LEAN_EXPORT lean_object* l___private_Lean_Data_Lsp_Basic_0__Lean_Lsp_ordPosition
 LEAN_EXPORT lean_object* l_Lean_Lsp_instBEqRange;
 static lean_object* l___private_Lean_Data_Lsp_Basic_0__Lean_Lsp_fromJsonTextDocumentEdit____x40_Lean_Data_Lsp_Basic___hyg_2527____closed__8;
 static lean_object* l_Lean_Lsp_instFromJsonTextDocumentIdentifier___closed__1;
+lean_object* l_Array_append___rarg___boxed(lean_object*, lean_object*);
 static lean_object* l_Lean_Lsp_CreateFile_instToJsonOptions___closed__1;
 LEAN_EXPORT lean_object* l_Array_mapMUnsafe_map___at_Lean_Lsp_instToJsonTextEditBatch___spec__1___boxed(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_Lsp_WorkspaceEdit_changes_x3f___default;
@@ -5778,7 +5779,7 @@ static lean_object* _init_l_Lean_Lsp_instAppendTextEditBatch___closed__1() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_alloc_closure((void*)(l_Array_append___rarg), 2, 0);
+x_1 = lean_alloc_closure((void*)(l_Array_append___rarg___boxed), 2, 0);
 return x_1;
 }
 }
@@ -20386,6 +20387,7 @@ if (x_33 == 0)
 lean_object* x_34; lean_object* x_35; 
 x_34 = lean_ctor_get(x_8, 0);
 x_35 = l_Array_append___rarg(x_32, x_34);
+lean_dec(x_34);
 lean_ctor_set(x_8, 0, x_35);
 if (lean_obj_tag(x_5) == 0)
 {
@@ -20419,6 +20421,7 @@ x_38 = lean_ctor_get(x_8, 0);
 lean_inc(x_38);
 lean_dec(x_8);
 x_39 = l_Array_append___rarg(x_32, x_38);
+lean_dec(x_38);
 x_40 = lean_alloc_ctor(1, 1, 0);
 lean_ctor_set(x_40, 0, x_39);
 if (lean_obj_tag(x_5) == 0)
@@ -20540,6 +20543,7 @@ _start:
 {
 lean_object* x_4; 
 x_4 = l_Lean_Lsp_WorkspaceEdit_instAppend___lambda__3(x_1, x_2, x_3);
+lean_dec(x_3);
 lean_dec(x_1);
 return x_4;
 }
