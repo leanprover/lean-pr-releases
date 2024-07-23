@@ -242,10 +242,10 @@ def «structure»          := leading_parser
 @[builtin_command_parser] def noncomputableSection := leading_parser
   "noncomputable " >> "section" >> optional (ppSpace >> checkColGt >> ident)
 /--
-A `section`/`end` pair delimits the scope of `variable`, `open`, `set_option`, and `local` commands.
-Sections can be nested. `section <id>` provides a label to the section that has to appear with the
-matching `end`. In either case, the `end` can be omitted, in which case the section is closed at the
-end of the file.
+A `section`/`end` pair delimits the scope of `variable`, `include, `open`, `set_option`, and `local`
+commands. Sections can be nested. `section <id>` provides a label to the section that has to appear
+with the matching `end`. In either case, the `end` can be omitted, in which case the section is
+closed at the end of the file.
 -/
 @[builtin_command_parser] def «section»      := leading_parser
   "section" >> optional (ppSpace >> checkColGt >> ident)
@@ -703,8 +703,13 @@ list, so it should be brief.
 @[builtin_command_parser] def genInjectiveTheorems := leading_parser
   "gen_injective_theorems% " >> ident
 
-/-- To be implemented. -/
-@[builtin_command_parser] def «include» := leading_parser "include " >> many1 (checkColGt >> ident)
+/--
+`include eeny meeny` instructs Lean to include the section `variable`s `eeny` and `meeny` in all
+declarations in the remainder of the current section, differing from the default behavior of
+conditionally including variables based on use in the declaration header. `include` is usually
+followed by the `in` combinator to limit the inclusion to the subsequent declaration.
+-/
+@[builtin_command_parser] def «include» := leading_parser "include " >> many1 ident
 
 /-- No-op parser used as syntax kind for attaching remaining whitespace at the end of the input. -/
 @[run_builtin_parser_attribute_hooks] def eoi : Parser := leading_parser ""
