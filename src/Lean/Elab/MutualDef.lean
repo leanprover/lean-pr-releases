@@ -366,7 +366,7 @@ private def elabFunValues (headers : Array DefViewElabHeader) (vars : Array Expr
       withReuseContext header.value do
       withDeclName header.declName <| withLevelNames header.levelNames do
       let valStx ← liftMacroM <| declValToTerm header.value
-      (if header.kind.isTheorem && !deprecated.oldSectionVars.get (← getOptions) then withHeaderSecVars vars includedVars #[header] else fun x => x #[]) fun _ => do
+      (if header.kind.isTheorem && !deprecated.oldSectionVars.get (← getOptions) then withHeaderSecVars vars includedVars #[header] else fun x => x #[]) fun vars => do
       forallBoundedTelescope header.type header.numParams fun xs type => do
         -- Add new info nodes for new fvars. The server will detect all fvars of a binder by the binder's source location.
         for i in [0:header.binderIds.size] do
@@ -378,7 +378,17 @@ private def elabFunValues (headers : Array DefViewElabHeader) (vars : Array Expr
         -- NOTE: without this `instantiatedMVars`, `mkLambdaFVars` may leave around a redex that
         -- leads to more section variables being included than necessary
         let val ← instantiateMVars val
-        mkLambdaFVars xs val
+        let val ← mkLambdaFVars xs val
+        unless header.type.hasSorry || val.hasSorry do
+          for var in vars do
+            unless header.type.containsFVar var.fvarId! || val.containsFVar var.fvarId! || (← vars.anyM (fun v => return (← v.fvarId!.getType).containsFVar var.fvarId!)) do
+              let varDecl ← var.fvarId!.getDecl
+              let var := if varDecl.userName.hasMacroScopes && varDecl.binderInfo.isInstImplicit then
+                m!"[{varDecl.type}]".group
+              else
+                var
+              logWarningAt header.ref m!"included section variable '{var}' is not used in '{header.declName}', consider excluding it"
+        return val
     if let some snap := header.bodySnap? then
       snap.new.resolve <| some {
         diagnostics :=
