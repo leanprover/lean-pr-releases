@@ -328,7 +328,7 @@ Runs `k` with a restricted local context where only section variables from `vars
 * are directly referenced in any `headers`,
 * are included in `includedVars` (via the `include` command),
 * are directly referenced in any variable included by these rules, OR
-* are instance-implicit variables that reference any variable included by these rules.
+* are instance-implicit variables that only reference section variables included by these rules.
 -/
 private def withHeaderSecVars {α} (vars : Array Expr) (includedVars : List Name) (headers : Array DefViewElabHeader)
     (k : Array Expr → TermElabM α) : TermElabM α := do
@@ -342,9 +342,11 @@ where
     vars.forRevM fun var => do
       let ldecl ← getFVarLocalDecl var
       let st ← get
-      if includedVars.contains ldecl.userName || ldecl.binderInfo.isInstImplicit && ldecl.type.hasAnyFVar st.fvarSet.contains then
+      if includedVars.contains ldecl.userName || ldecl.binderInfo.isInstImplicit && (← getFVars ldecl.type).all st.fvarSet.contains then
         modify (·.add ldecl.fvarId)
         ldecl.type.collectFVars
+  getFVars (e : Expr) : MetaM (Array FVarId) :=
+    (·.2.fvarIds) <$> e.collectFVars.run {}
 
 register_builtin_option deprecated.oldSectionVars : Bool := {
   defValue := false
