@@ -337,14 +337,22 @@ private def withHeaderSecVars {α} (vars : Array Expr) (includedVars : List Name
   withLCtx lctx localInsts <| k vars
 where
   collectUsed : StateRefT CollectFVars.State MetaM Unit := do
+    -- directly referenced in headers
     headers.forM (·.type.collectFVars)
-    -- Do backwards traversal to correctly apply the transitive rules
-    vars.forRevM fun var => do
+    -- included by `include`
+    vars.forM fun var => do
+      let ldecl ← getFVarLocalDecl var
+      if includedVars.contains ldecl.userName then
+        modify (·.add ldecl.fvarId)
+    -- transitively referenced
+    get >>= (·.addDependencies) >>= set
+    -- instances (`addDependencies` unnecessary as by definition they may only reference variables
+    -- already included)
+    vars.forM fun var => do
       let ldecl ← getFVarLocalDecl var
       let st ← get
-      if includedVars.contains ldecl.userName || ldecl.binderInfo.isInstImplicit && (← getFVars ldecl.type).all st.fvarSet.contains then
+      if ldecl.binderInfo.isInstImplicit && (← getFVars ldecl.type).all st.fvarSet.contains then
         modify (·.add ldecl.fvarId)
-        ldecl.type.collectFVars
   getFVars (e : Expr) : MetaM (Array FVarId) :=
     (·.2.fvarIds) <$> e.collectFVars.run {}
 

@@ -41,3 +41,13 @@ theorem t6 (a : α) : a = a := rfl
 variable {n : Nat} in
 include n in
 theorem t7 : ∃ (n : Nat), n = n := by exists n
+
+/-! traversal order bug broke instance inclusion -/
+variable {M N : Type} (r : N → N → Prop)
+class IsTrans (N : Type) (r : N → N → Prop) : Prop
+variable [IsTrans N r] {a b c d : N}
+/--
+warning: included section variable '[IsTrans N r]' is not used in 'act_rel_of_rel_of_act_rel', consider excluding it
+-/
+#guard_msgs in
+theorem act_rel_of_rel_of_act_rel (ab : r a b) : r a b := ab
