@@ -74,7 +74,7 @@ ifeq "${CMAKE_SYSTEM_NAME}" "Windows"
 	  ${LIB}/temp/Lean/Meta/WHNF.o -Wl,--start-group ${LIB}/temp/libLean.a.export -lleancpp -Wl,--end-group -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared_1.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 	@rm -f $@
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
-	  ${LIB}/temp/Lean.o ${CMAKE_BINARY_DIR}/util/CMakeFiles/util.dir/shell.cpp.o -lleanshared_1 -Wl,--start-group -lleanshared_1 -lleancpp -lleanshared_1 -lLean -Wl,--end-group -lleanshared_1 ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	  ${LIB}/temp/Lean.o $(LEAN_SHELL) -lleanshared_1 -Wl,--start-group -lleanshared_1 -lleancpp -lleanshared_1 -lLean -Wl,--end-group -lleanshared_1 ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 else
 # create empty library on platforms without restrictive symbol limits; avoids costly indirections and troubles with cross-library exceptions
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/empty.c ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
@@ -91,11 +91,11 @@ Lake:
 # lake is in its own subdirectory, so must adjust relative paths...
 	+"${LEAN_BIN}/leanmake" -C lake bin lib PKG=Lake BIN_NAME=lake${CMAKE_EXECUTABLE_SUFFIX} $(LEANMAKE_OPTS) LINK_OPTS='${CMAKE_EXE_LINKER_FLAGS_MAKE_MAKE}' OUT="../${LIB}" LIB_OUT="../${LIB}/lean" OLEAN_OUT="../${LIB}/lean"
 
-${CMAKE_BINARY_DIR}/bin/lean${CMAKE_EXECUTABLE_SUFFIX}: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX} $(LEAN_SHELL)
+${CMAKE_BINARY_DIR}/bin/lean${CMAKE_EXECUTABLE_SUFFIX}: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX}
 	@echo "[    ] Building $@"
 # on Windows, must remove file before writing a new one (since the old one may be in use)
 	@rm -f $@
-	"${CMAKE_BINARY_DIR}/leanc.sh" $(LEAN_SHELL) ${CMAKE_EXE_LINKER_FLAGS_MAKE} ${LEAN_EXE_LINKER_FLAGS} ${LEANC_OPTS} -o $@
+	"${CMAKE_BINARY_DIR}/leanc.sh" ${CMAKE_EXE_LINKER_FLAGS_MAKE} ${LEAN_EXE_LINKER_FLAGS} ${LEANC_OPTS} -o $@
 
 lean: ${CMAKE_BINARY_DIR}/bin/lean${CMAKE_EXECUTABLE_SUFFIX}
 
