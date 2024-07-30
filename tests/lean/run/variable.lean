@@ -1,7 +1,6 @@
 /-! # Basic section variable tests -/
 
 /-! Directly referenced variables should be included. -/
-
 variable {n : Nat} in
 theorem t1 : n = n := by induction n <;> rfl
 
@@ -51,3 +50,13 @@ warning: included section variable '[IsTrans N r]' is not used in 'act_rel_of_re
 -/
 #guard_msgs in
 theorem act_rel_of_rel_of_act_rel (ab : r a b) : r a b := ab
+
+/-! More complex include case, instance should be included via `f`. -/
+class EquivLike (F : Type) (α β : Type) : Type
+variable {F : Type} [EquivLike F α β] (f : F) in
+include f in
+theorem MulEquiv.decompositionMonoid (_b : β) : α = α :=
+  let _ : EquivLike F α β := inferInstance; let _ := f; rfl
+/-- info: MulEquiv.decompositionMonoid {α β F : Type} [EquivLike F α β] (f : F) (_b : β) : α = α -/
+#guard_msgs in
+#check MulEquiv.decompositionMonoid
