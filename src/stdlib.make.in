@@ -71,13 +71,13 @@ ifeq "${CMAKE_SYSTEM_NAME}" "Windows"
 	@rm -f ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX}
 # "half-way point" DLL to avoid symbol limit
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} \
-	  ${LIB}/temp/Lean/Meta/WHNF.o -Wl,--start-group ${LIB}/temp/libLean.a.export -Wl,--whole-archive -lleancpp -Wl,--no-whole-archive -Wl,--end-group -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared_1.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS} -Wl,-Map=${LIB}/temp/libleanshared_1.map
+	  ${LIB}/temp/Lean/Meta/WHNF.o.export -Wl,--start-group ${LIB}/temp/libLean.a.export -Wl,--whole-archive ${LIB}/temp/libleancpp_1.a -Wl,--no-whole-archive -Wl,--end-group -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared_1.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS} -Wl,-Map=${LIB}/temp/libleanshared_1.map
 	cp ${LIB}/temp/libLean.a.export ${LIB}/temp/libleanshared.a.export
 	#sed -En 's!^(${LIB}/temp/Lean/.*)!\1!p' ${LIB}/temp/libleanshared_1.map > ${LIB}/temp/libleanshared.a.export.in
 	sed -En '/\.\./p' ${LIB}/temp/libleanshared_1.map > ${LIB}/temp/libleanshared.a.export.in
-	"${CMAKE_AR}" dP ${LIB}/temp/libleanshared.a.export @${LIB}/temp/libleanshared.a.export.in
+	"${CMAKE_AR}" dP ${LIB}/temp/libleanshared.a.export ${LIB}/temp/Lean/Meta/WHNF.o.export @${LIB}/temp/libleanshared.a.export.in
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
-	  ${LIB}/temp/Lean.o $(LEAN_SHELL) $(LEAN_INITIALIZE) ${LIB}/temp/libleanshared.a.export -lleanshared_1 -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	  ${LIB}/temp/Lean.o.export $(LEAN_SHELL) $(LEAN_INITIALIZE) ${LIB}/temp/libleanshared.a.export -lleanshared_1 -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 else
 # create empty library on platforms without restrictive symbol limits; avoids costly indirections and troubles with cross-library exceptions
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/empty.c ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}

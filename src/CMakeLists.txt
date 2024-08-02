@@ -403,7 +403,7 @@ endif()
 # are already loaded) and probably fail unless we set up LD_LIBRARY_PATH.
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   # import library created by the `leanshared` target
-  string(APPEND LEANC_SHARED_LINKER_FLAGS " -lInit_shared -lleanshared")
+  string(APPEND LEANC_SHARED_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")
 elseif("${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
   string(APPEND LEANC_SHARED_LINKER_FLAGS " -Wl,-undefined,dynamic_lookup")
 endif()
@@ -495,9 +495,12 @@ else()
   add_subdirectory(library/compiler)
   set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:compiler>)
   add_subdirectory(initialize)
-  #set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:initialize>)
 
-  add_library(leancpp STATIC ${LEAN_OBJS})
+  add_library(leancpp_1 STATIC ${LEAN_OBJS})
+  set_target_properties(leancpp_1 PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
+    OUTPUT_NAME leancpp_1)
+  add_library(leancpp STATIC ${LEAN_OBJS} $<TARGET_OBJECTS:initialize>)
   set_target_properties(leancpp PROPERTIES
     OUTPUT_NAME leancpp)
 endif()
