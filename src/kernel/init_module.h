@@ -6,6 +6,6 @@ Author: Leonardo de Moura
 */
 #pragma once
 namespace lean {
-void initialize_kernel_module();
-void finalize_kernel_module();
+LEAN_EXPORT void initialize_kernel_module();
+LEAN_EXPORT void finalize_kernel_module();
 }

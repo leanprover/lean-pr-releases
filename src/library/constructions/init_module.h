@@ -7,6 +7,6 @@ Author: Leonardo de Moura
 #pragma once
 
 namespace lean {
-void initialize_constructions_module();
-void finalize_constructions_module();
+LEAN_EXPORT void initialize_constructions_module();
+LEAN_EXPORT void finalize_constructions_module();
 }

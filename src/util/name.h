@@ -49,7 +49,7 @@ inline uint64_t lean_name_hash_exported_b(b_lean_obj_arg n) {
 
 enum class name_kind { ANONYMOUS, STRING, NUMERAL };
 /** \brief Hierarchical names. */
-class name : public object_ref {
+class LEAN_EXPORT name : public object_ref {
 public:
     /* Low level primitives */
     static bool eq(b_obj_arg n1, b_obj_arg n2) { return lean_name_eq(n1, n2); }
@@ -201,7 +201,7 @@ public:
     }
 };
 
-name string_to_name(std::string const & str);
+LEAN_EXPORT name string_to_name(std::string const & str);
 
 struct name_hash_fn { unsigned operator()(name const & n) const { return n.hash(); } };
 struct name_eq_fn { bool operator()(name const & n1, name const & n2) const { return n1 == n2; } };
