@@ -17,7 +17,7 @@ Author: Leonardo de Moura
 #include "library/compiler/ir_interpreter.h"
 
 namespace lean {
-LEAN_EXPORT void initialize_compiler_module() {
+void initialize_compiler_module() {
     initialize_compiler_util();
     initialize_lcnf();
     initialize_elim_dead_let();
@@ -31,7 +31,7 @@ LEAN_EXPORT void initialize_compiler_module() {
     initialize_ir_interpreter();
 }
 
-LEAN_EXPORT void finalize_compiler_module() {
+void finalize_compiler_module() {
     finalize_ir_interpreter();
     finalize_ir();
     finalize_ll_infer_type();

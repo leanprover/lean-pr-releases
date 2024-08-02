@@ -160,7 +160,7 @@ std::string dirname(std::string const & fname) {
     }
 }
 
-LEAN_EXPORT std::string stem(std::string const & fname) {
+std::string stem(std::string const & fname) {
     auto nfname = normalize_path(fname);
     auto i = nfname.rfind(g_sep);
     if (i == std::string::npos) {
@@ -175,7 +175,7 @@ LEAN_EXPORT std::string stem(std::string const & fname) {
     return nfname.substr(i, j - i);
 }
 
-LEAN_EXPORT std::string read_file(std::string const & fname, std::ios_base::openmode mode) {
+std::string read_file(std::string const & fname, std::ios_base::openmode mode) {
     std::ifstream in(fname, mode);
     if (!in.good()) throw file_not_found_exception(fname);
     std::stringstream buf;
@@ -234,7 +234,7 @@ std::vector<std::string> read_dir(std::string const &dirname) {
     return files;
 }
 
-LEAN_EXPORT std::string lrealpath(std::string const & fname) {
+std::string lrealpath(std::string const & fname) {
 #if defined(LEAN_EMSCRIPTEN)
     return fname;
 #elif defined(LEAN_WINDOWS)

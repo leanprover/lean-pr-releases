@@ -11,7 +11,7 @@ Author: Leonardo de Moura
 
 namespace lean {
 /** \brief Configuration options. */
-class LEAN_EXPORT options {
+class options {
     kvmap m_value;
     options(kvmap const & v):m_value(v) {}
 public:

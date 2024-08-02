@@ -293,7 +293,7 @@ struct print_expr_fn {
     }
 };
 
-LEAN_EXPORT void init_default_print_fn() {
+void init_default_print_fn() {
     set_print_fn([](std::ostream & out, expr const & e) {
             print_expr_fn pr(out);
             pr(e);

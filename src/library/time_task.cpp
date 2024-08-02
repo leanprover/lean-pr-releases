@@ -15,12 +15,12 @@ static std::map<std::string, second_duration> * g_cum_times;
 static mutex * g_cum_times_mutex;
 LEAN_THREAD_PTR(time_task, g_current_time_task);
 
-LEAN_EXPORT void report_profiling_time(std::string const & category, second_duration time) {
+void report_profiling_time(std::string const & category, second_duration time) {
     lock_guard<mutex> _(*g_cum_times_mutex);
     (*g_cum_times)[category] += time;
 }
 
-LEAN_EXPORT void display_cumulative_profiling_times(std::ostream & out) {
+void display_cumulative_profiling_times(std::ostream & out) {
     if (g_cum_times->empty())
         return;
     sstream ss;
@@ -41,7 +41,7 @@ void finalize_time_task() {
     delete g_cum_times_mutex;
 }
 
-LEAN_EXPORT time_task::time_task(std::string const & category, options const & opts, name decl) :
+time_task::time_task(std::string const & category, options const & opts, name decl) :
         m_category(category) {
     if (get_profiler(opts)) {
         m_timeit = optional<xtimeit>(get_profiling_threshold(opts), [=](second_duration duration) mutable {
@@ -58,7 +58,7 @@ LEAN_EXPORT time_task::time_task(std::string const & category, options const & o
     }
 }
 
-LEAN_EXPORT time_task::~time_task() {
+time_task::~time_task() {
     if (m_timeit) {
         g_current_time_task = m_parent_task;
         report_profiling_time(m_category, m_timeit->get_elapsed());

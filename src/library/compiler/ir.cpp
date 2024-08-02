@@ -577,7 +577,7 @@ extern "C" LEAN_EXPORT object* lean_add_extern(object * env, object * fn) {
 
 extern "C" object * lean_ir_emit_c(object * env, object * mod_name);
 
-LEAN_EXPORT string_ref emit_c(environment const & env, name const & mod_name) {
+string_ref emit_c(environment const & env, name const & mod_name) {
     object * r = lean_ir_emit_c(env.to_obj_arg(), mod_name.to_obj_arg());
     string_ref s(cnstr_get(r, 0), true);
     if (cnstr_tag(r) == 0) {

@@ -15,7 +15,7 @@ Author: Leonardo de Moura
 #include "kernel/trace.h"
 
 namespace lean {
-LEAN_EXPORT void initialize_kernel_module() {
+void initialize_kernel_module() {
     initialize_level();
     initialize_expr();
     initialize_declaration();
@@ -27,7 +27,7 @@ LEAN_EXPORT void initialize_kernel_module() {
     initialize_trace();
 }
 
-LEAN_EXPORT void finalize_kernel_module() {
+void finalize_kernel_module() {
     finalize_trace();
     finalize_quot();
     finalize_inductive();

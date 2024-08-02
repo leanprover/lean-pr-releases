@@ -100,29 +100,29 @@ static void display_name(std::ostream & out, name const & n, bool escape, char c
         display_name_core(out, n, escape, sep);
 }
 
-LEAN_EXPORT name::name(name const & prefix, char const * n):
+name::name(name const & prefix, char const * n):
     object_ref(name_mk_string_of_cstr(prefix.raw(), n)) {
     inc(prefix.raw());
 }
 
-LEAN_EXPORT name::name(name const & prefix, unsigned k):
+name::name(name const & prefix, unsigned k):
     object_ref(lean_name_mk_numeral(prefix.raw(), mk_nat_obj(k))) {
     inc(prefix.raw());
 }
 
-LEAN_EXPORT name::name(name const & prefix, string_ref const & s):
+name::name(name const & prefix, string_ref const & s):
     object_ref(lean_name_mk_string(prefix.raw(), s.raw())) {
     inc(prefix.raw());
     inc(s.raw());
 }
 
-LEAN_EXPORT name::name(name const & prefix, nat const & k):
+name::name(name const & prefix, nat const & k):
     object_ref(lean_name_mk_numeral(prefix.raw(), k.raw())) {
     inc(prefix.raw());
     inc(k.raw());
 }
 
-LEAN_EXPORT name::name(std::initializer_list<char const *> const & l):name() {
+name::name(std::initializer_list<char const *> const & l):name() {
     if (l.size() == 0) {
         return;
     } else {
@@ -188,7 +188,7 @@ bool operator==(name const & a, char const * b) {
         name::get_string(a.raw()) == b;
 }
 
-LEAN_EXPORT int name::cmp_core(object * i1, object * i2) {
+int name::cmp_core(object * i1, object * i2) {
     buffer<object*> limbs1, limbs2;
     copy_limbs(i1, limbs1);
     copy_limbs(i2, limbs2);
@@ -294,7 +294,7 @@ std::string name::escape(char const * sep) const {
     return s.str();
 }
 
-LEAN_EXPORT std::ostream & operator<<(std::ostream & out, name const & n) {
+std::ostream & operator<<(std::ostream & out, name const & n) {
     display_name(out, n, false, lean_name_separator);
     return out;
 }
@@ -387,7 +387,7 @@ bool is_part_of(std::string const & p, name n) {
     }
 }
 
-LEAN_EXPORT name string_to_name(std::string const & str) {
+name string_to_name(std::string const & str) {
     static_assert(*(lean_name_separator+1) == 0, "this function assumes the length of lean_name_separator is 1");
     name result;
     std::string id_part;

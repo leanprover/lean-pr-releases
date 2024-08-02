@@ -34,19 +34,19 @@ void finalize_options() {
     delete g_timeout;
 }
 
-LEAN_EXPORT name const & get_verbose_opt_name() {
+name const & get_verbose_opt_name() {
     return *g_verbose;
 }
 
-LEAN_EXPORT name const & get_max_memory_opt_name() {
+name const & get_max_memory_opt_name() {
     return *g_max_memory;
 }
 
-LEAN_EXPORT name const & get_timeout_opt_name() {
+name const & get_timeout_opt_name() {
     return *g_timeout;
 }
 
-LEAN_EXPORT bool get_verbose(options const & opts) {
+bool get_verbose(options const & opts) {
     return opts.get_bool(*g_verbose, LEAN_DEFAULT_VERBOSE);
 }
 

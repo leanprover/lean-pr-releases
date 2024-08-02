@@ -66,7 +66,7 @@ environment mk_empty_environment(uint32 trust_lvl) {
     return get_io_result<environment>(lean_mk_empty_environment(trust_lvl, io_mk_world()));
 }
 
-LEAN_EXPORT environment::environment(unsigned trust_lvl):
+environment::environment(unsigned trust_lvl):
     object_ref(mk_empty_environment(trust_lvl)) {
 }
 
@@ -323,7 +323,7 @@ void environment::for_each_constant(std::function<void(constant_info const & d)>
 
 extern "C" obj_res lean_display_stats(obj_arg env, obj_arg w);
 
-LEAN_EXPORT void environment::display_stats() const {
+void environment::display_stats() const {
     dec_ref(lean_display_stats(to_obj_arg(), io_mk_world()));
 }
 

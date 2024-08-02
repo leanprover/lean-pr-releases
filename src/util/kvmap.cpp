@@ -87,19 +87,19 @@ static kvmap insert(kvmap const & m, name const & k, data_value const & v) {
         return kvmap(head(m), insert(tail(m), k, v));
 }
 
-LEAN_EXPORT kvmap set_string(kvmap const & m, name const & k, string_ref const & v) {
+kvmap set_string(kvmap const & m, name const & k, string_ref const & v) {
     return insert(m, k, data_value(v));
 }
 
-LEAN_EXPORT kvmap set_bool(kvmap const & m, name const & k, bool v) {
+kvmap set_bool(kvmap const & m, name const & k, bool v) {
     return insert(m, k, data_value(v));
 }
 
-LEAN_EXPORT kvmap set_name(kvmap const & m, name const & k, name const & v) {
+kvmap set_name(kvmap const & m, name const & k, name const & v) {
     return insert(m, k, data_value(v));
 }
 
-LEAN_EXPORT kvmap set_nat(kvmap const & m, name const & k, nat const & v) {
+kvmap set_nat(kvmap const & m, name const & k, nat const & v) {
     return insert(m, k, data_value(v));
 }
 }

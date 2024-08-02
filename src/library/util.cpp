@@ -817,7 +817,7 @@ optional<name> is_unsafe_rec_name(name const & n) {
 }
 
 static std::string * g_version_string = nullptr;
-LEAN_EXPORT std::string const & get_version_string() { return *g_version_string; }
+std::string const & get_version_string() { return *g_version_string; }
 
 expr const & extract_mdata(expr const & e) {
     if (is_mdata(e)) {

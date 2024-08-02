@@ -8,12 +8,12 @@ Author: Leonardo de Moura
 #include "library/constructions/util.h"
 
 namespace lean{
-LEAN_EXPORT void initialize_constructions_module() {
+void initialize_constructions_module() {
     initialize_constructions_util();
     initialize_def_projection();
 }
 
-LEAN_EXPORT void finalize_constructions_module() {
+void finalize_constructions_module() {
     finalize_def_projection();
     finalize_constructions_util();
 }
