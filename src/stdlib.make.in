@@ -83,10 +83,10 @@ else
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/empty.c ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 ifeq "${CMAKE_SYSTEM_NAME}" "Darwin"
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
-	  ${LIB}/temp/Lean.o $(LEAN_SHELL) -lleancpp -lLean ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	  ${LIB}/temp/Lean.o $(LEAN_SHELL) $(LEAN_INITIALIZE) -lInit -lStd -lLean -lleancpp ${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 else
-	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
-	  ${LIB}/temp/Lean.o $(LEAN_SHELL) -Wl,--start-group -lleancpp -lLean -Wl,--end-group ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ -Wl,--no-undefined \
+	  ${LIB}/temp/Lean.o $(LEAN_SHELL) $(LEAN_INITIALIZE) -Wl,--start-group -lInit -lStd -lLean -lleancpp -Wl,--end-group ${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 endif
 endif
 
