@@ -495,7 +495,7 @@ else()
   add_subdirectory(library/compiler)
   set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:compiler>)
   add_subdirectory(initialize)
-  set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:initialize>)
+  #set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:initialize>)
 
   add_library(leancpp STATIC ${LEAN_OBJS})
   set_target_properties(leancpp PROPERTIES
@@ -565,7 +565,7 @@ else()
   add_custom_target(leanshared ALL
     WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
     DEPENDS Init_shared leancpp
-    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared
+    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared LEAN_SHELL="$<TARGET_OBJECTS:shell>" LEAN_INITIALIZE="$<TARGET_OBJECTS:initialize>"
     VERBATIM)
 
   string(APPEND CMAKE_EXE_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")

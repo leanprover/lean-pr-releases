@@ -64,17 +64,20 @@ endif
 
 Init_shared: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX}
 
-${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX}: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/libLean.a.export ${LIB}/lean/libleancpp.a $(LEAN_SHELL)
+${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX}: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/libLean.a.export ${LIB}/lean/libleancpp.a #$(LEAN_SHELL)
 	@echo "[    ] Building $@"
 ifeq "${CMAKE_SYSTEM_NAME}" "Windows"
 # on Windows, must remove file before writing a new one (since the old one may be in use)
 	@rm -f ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX}
 # "half-way point" DLL to avoid symbol limit
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} \
-	  ${LIB}/temp/Lean/Meta/WHNF.o -Wl,--start-group ${LIB}/temp/libLean.a.export -lleancpp -Wl,--end-group -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared_1.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
-	@rm -f $@
+	  ${LIB}/temp/Lean/Meta/WHNF.o -Wl,--start-group ${LIB}/temp/libLean.a.export -Wl,--whole-archive -lleancpp -Wl,--no-whole-archive -Wl,--end-group -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared_1.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS} -Wl,-Map=${LIB}/temp/libleanshared_1.map
+	cp ${LIB}/temp/libLean.a.export ${LIB}/temp/libleanshared.a.export
+	#sed -En 's!^(${LIB}/temp/Lean/.*)!\1!p' ${LIB}/temp/libleanshared_1.map > ${LIB}/temp/libleanshared.a.export.in
+	sed -En '/\.\./p' ${LIB}/temp/libleanshared_1.map > ${LIB}/temp/libleanshared.a.export.in
+	"${CMAKE_AR}" dP ${LIB}/temp/libleanshared.a.export @${LIB}/temp/libleanshared.a.export.in
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
-	  ${LIB}/temp/Lean.o $(LEAN_SHELL) -lleanshared_1 -Wl,--start-group -lleanshared_1 -lleancpp -lleanshared_1 -lLean -Wl,--end-group -lleanshared_1 -Wl,--out-implib,${LIB}/lean/libleanshared.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	  ${LIB}/temp/Lean.o $(LEAN_SHELL) $(LEAN_INITIALIZE) ${LIB}/temp/libleanshared.a.export -lleanshared_1 -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 else
 # create empty library on platforms without restrictive symbol limits; avoids costly indirections and troubles with cross-library exceptions
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/empty.c ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}

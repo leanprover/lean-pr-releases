@@ -143,7 +143,7 @@ $(LIB_OUT)/$(STATIC_LIB_NAME): $(NAT_OBJS) | $(LIB_OUT)
 $(TEMP_OUT)/$(STATIC_LIB_NAME).export: $(addsuffix .export,$(NAT_OBJS)) | $(LIB_OUT)
 	@rm -f $@
 	$(file >$@.in) $(foreach O,$^,$(file >>$@.in,"$O"))
-	@$(LEAN_AR) rcs $@ @$@.in
+	@$(LEAN_AR) rcsT $@ @$@.in
 	@rm -f $@.in
 else
 $(LIB_OUT)/$(STATIC_LIB_NAME): $(NAT_OBJS) | $(LIB_OUT)
