@@ -989,7 +989,7 @@ public:
         return r;
     }
 
-    uint32 run_main(int argc, char * argv[]) {
+    LEAN_EXPORT uint32 run_main(int argc, char * argv[]) {
         decl d = get_decl("main");
         array_ref<param> const & params = decl_params(d);
         buffer<object *> args;

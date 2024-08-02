@@ -16,7 +16,7 @@ extern "C" object * lean_data_value_to_string (obj_arg d);
 
 extern "C" object * lean_get_option_decls_array(obj_arg w);
 
-option_declarations get_option_declarations() {
+LEAN_EXPORT option_declarations get_option_declarations() {
     auto decl_array = get_io_result<array_ref<pair_ref<name, option_decl> > > (lean_get_option_decls_array(io_mk_world()));
     option_declarations r;
     for (pair_ref<name, option_decl> const & p : decl_array) {

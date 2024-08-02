@@ -15,19 +15,19 @@ Author: Leonardo de Moura
 #include "library/formatter.h"
 
 namespace lean {
-void initialize_library_core_module() {
+LEAN_EXPORT void initialize_library_core_module() {
     initialize_formatter();
     initialize_constants();
     initialize_profiling();
 }
 
-void finalize_library_core_module() {
+LEAN_EXPORT void finalize_library_core_module() {
     finalize_profiling();
     finalize_constants();
     finalize_formatter();
 }
 
-void initialize_library_module() {
+LEAN_EXPORT void initialize_library_module() {
     initialize_print();
     initialize_num();
     initialize_annotation();
@@ -36,7 +36,7 @@ void initialize_library_module() {
     initialize_time_task();
 }
 
-void finalize_library_module() {
+LEAN_EXPORT void finalize_library_module() {
     finalize_time_task();
     finalize_library_util();
     finalize_class();
