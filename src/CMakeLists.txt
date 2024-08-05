@@ -402,7 +402,7 @@ endif()
 # executable or `leanshared`, plugins would try to look them up at load time (even though they
 # are already loaded) and probably fail unless we set up LD_LIBRARY_PATH.
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  # import library created by the `leanshared` target
+  # import libraries created by the `leanshared` target
   string(APPEND LEANC_SHARED_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")
 elseif("${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
   string(APPEND LEANC_SHARED_LINKER_FLAGS " -Wl,-undefined,dynamic_lookup")
@@ -511,11 +511,6 @@ string(REGEX REPLACE "^([a-zA-Z]):" "/\\1" LEAN_BIN "${CMAKE_BINARY_DIR}/bin")
 # ...and Make doesn't like absolute Windows paths either
 # (also looks nicer in the build log)
 file(RELATIVE_PATH LIB ${LEAN_SOURCE_DIR} ${CMAKE_BINARY_DIR}/lib)
-
-# set up libInit_shared only on Windows; see also stdlib.make.in
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  set(INIT_SHARED_LINKER_FLAGS "-Wl,--whole-archive ${CMAKE_BINARY_DIR}/lib/temp/libInit.a.export ${CMAKE_BINARY_DIR}/lib/temp/libStd.a.export ${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a -Wl,--no-whole-archive -Wl,--out-implib,${CMAKE_BINARY_DIR}/lib/lean/libInit_shared.dll.a")
-endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
   # We do not use dynamic linking via leanshared for Emscripten to keep things

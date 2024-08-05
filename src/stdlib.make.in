@@ -52,14 +52,16 @@ ${LIB}/temp/empty.c:
 
 # we specify the precise file names here to avoid rebuilds
 ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX}: ${LIB}/temp/libInit.a.export ${LIB}/temp/libStd.a.export ${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a ${LIB}/temp/empty.c
-ifeq "${INIT_SHARED_LINKER_FLAGS}" ""
+ifneq "${CMAKE_SYSTEM_NAME}" "Windows"
 # create empty library on platforms without restrictive symbol limits; avoids costly indirections and troubles with cross-library exceptions
-	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ ${LIB}/temp/empty.c ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ ${LIB}/temp/empty.c ${INIT_SHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 else
 	@echo "[    ] Building $@"
 # on Windows, must remove file before writing a new one (since the old one may be in use)
 	@rm -f $@
-	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ ${INIT_SHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
+	  -Wl,--whole-archive ${CMAKE_BINARY_DIR}/lib/temp/libInit.a.export ${CMAKE_BINARY_DIR}/lib/temp/libStd.a.export ${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a -Wl,--no-whole-archive \
+	  -Wl,--out-implib,${CMAKE_BINARY_DIR}/lib/lean/libInit_shared.dll.a ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 endif
 
 Init_shared: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX}
