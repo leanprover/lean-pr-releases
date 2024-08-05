@@ -460,6 +460,9 @@ if(CMAKE_OSX_SYSROOT AND NOT LEAN_STANDALONE)
   string(APPEND LEANC_EXTRA_FLAGS " ${CMAKE_CXX_SYSROOT_FLAG}${CMAKE_OSX_SYSROOT}")
 endif()
 
+add_subdirectory(initialize)
+add_subdirectory(shell)
+
 if(${STAGE} GREATER 1)
   # reuse C++ parts, which don't change
   add_library(leanrt_initial-exec STATIC IMPORTED)
@@ -468,13 +471,17 @@ if(${STAGE} GREATER 1)
   add_library(leanrt STATIC IMPORTED)
   set_target_properties(leanrt PROPERTIES
     IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/lib/lean/libleanrt.a")
+  add_library(leancpp_1 STATIC IMPORTED)
+  set_target_properties(leancpp_1 PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/lib/temp/libleancpp_1.a")
   add_library(leancpp STATIC IMPORTED)
   set_target_properties(leancpp PROPERTIES
     IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/lib/lean/libleancpp.a")
   add_custom_target(copy-leancpp
     COMMAND cmake -E copy_if_different "${PREV_STAGE}/runtime/libleanrt_initial-exec.a" "${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a"
     COMMAND cmake -E copy_if_different "${PREV_STAGE}/lib/lean/libleanrt.a" "${CMAKE_BINARY_DIR}/lib/lean/libleanrt.a"
-    COMMAND cmake -E copy_if_different "${PREV_STAGE}/lib/lean/libleancpp.a" "${CMAKE_BINARY_DIR}/lib/lean/libleancpp.a")
+    COMMAND cmake -E copy_if_different "${PREV_STAGE}/lib/lean/libleancpp.a" "${CMAKE_BINARY_DIR}/lib/lean/libleancpp.a"
+    COMMAND cmake -E copy_if_different "${PREV_STAGE}/lib/temp/libleancpp_1.a" "${CMAKE_BINARY_DIR}/lib/temp/libleancpp_1.a")
   add_dependencies(leancpp copy-leancpp)
   if(LLVM)
       add_custom_target(copy-lean-h-bc
@@ -494,7 +501,6 @@ else()
   set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:constructions>)
   add_subdirectory(library/compiler)
   set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:compiler>)
-  add_subdirectory(initialize)
 
   add_library(leancpp_1 STATIC ${LEAN_OBJS})
   set_target_properties(leancpp_1 PROPERTIES
@@ -602,8 +608,6 @@ endif()
 file(COPY ${LEAN_SOURCE_DIR}/bin/leanmake DESTINATION ${CMAKE_BINARY_DIR}/bin)
 
 install(DIRECTORY "${CMAKE_BINARY_DIR}/bin/" USE_SOURCE_PERMISSIONS DESTINATION bin)
-
-add_subdirectory(shell)
 
 add_custom_target(clean-stdlib
   COMMAND rm -rf "${CMAKE_BINARY_DIR}/lib" || true)

@@ -29,7 +29,7 @@ lib.warn "The Nix-based build is deprecated" rec {
     realSrc = sourceByRegex (src + "/src") [ "CMakeLists\.txt" "cmake.*" "bin.*" "include.*" ".*\.in" "Leanc\.lean" ];
     preConfigure = ''
       touch empty.cpp
-      sed -i 's/add_subdirectory.*//;s/set(LEAN_OBJS.*/set(LEAN_OBJS empty.cpp)/' CMakeLists.txt
+      sed -i 's/add_subdirectory.*//;s/set(LEAN_OBJS.*/set(LEAN_OBJS empty.cpp)/;s/LEAN_SHELL=.*//' CMakeLists.txt
     '';
     dontBuild = true;
     installPhase = ''
