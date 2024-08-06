@@ -462,6 +462,7 @@ endif()
 
 add_subdirectory(initialize)
 add_subdirectory(shell)
+add_library(shell OBJECT util/shell.cpp)
 
 if(${STAGE} GREATER 1)
   # reuse C++ parts, which don't change

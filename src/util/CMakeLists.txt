@@ -7,5 +7,3 @@ add_library(util OBJECT name.cpp name_set.cpp
   name_generator.cpp kvmap.cpp map_foreach.cpp
   options.cpp option_declarations.cpp
   "${CMAKE_BINARY_DIR}/util/ffi.cpp")
-
-add_library(shell OBJECT shell.cpp)
