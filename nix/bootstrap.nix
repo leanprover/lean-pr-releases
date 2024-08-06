@@ -26,10 +26,10 @@ lib.warn "The Nix-based build is deprecated" rec {
   lean-bin-tools-unwrapped = buildCMake {
     name = "lean-bin-tools";
     outputs = [ "out" "leanc_src" ];
-    realSrc = sourceByRegex (src + "/src") [ "CMakeLists\.txt" "cmake.*" "bin.*" "include.*" ".*\.in" "Leanc\.lean" ];
+    realSrc = sourceByRegex (src + "/src") [ "CMakeLists\.txt" "cmake.*" "bin.*" "include.*" ".*\.in" "Leanc\.lean" "init.cpp" "shell.cpp" ];
     preConfigure = ''
       touch empty.cpp
-      sed -i 's/add_subdirectory.*//;s/set(LEAN_OBJS.*/set(LEAN_OBJS empty.cpp)/;s/LEAN_SHELL=.*//' CMakeLists.txt
+      sed -i 's/add_subdirectory.*//;s/set(LEAN_OBJS.*/set(LEAN_OBJS empty.cpp)/' CMakeLists.txt
     '';
     dontBuild = true;
     installPhase = ''
