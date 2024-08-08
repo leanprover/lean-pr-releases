@@ -26,7 +26,7 @@ lib.warn "The Nix-based build is deprecated" rec {
   lean-bin-tools-unwrapped = buildCMake {
     name = "lean-bin-tools";
     outputs = [ "out" "leanc_src" ];
-    realSrc = sourceByRegex (src + "/src") [ "CMakeLists\.txt" "[a-z]*" ".*\.in" "Leanc\.lean" ];
+    realSrc = sourceByRegex (src + "/src") [ "CMakeLists\.txt" "[a-z].*" ".*\.in" "Leanc\.lean" ];
     dontBuild = true;
     installPhase = ''
       mkdir $out $leanc_src

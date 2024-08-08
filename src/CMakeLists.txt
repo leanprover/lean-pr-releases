@@ -569,8 +569,8 @@ else()
 
   add_custom_target(leanshared ALL
     WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
-    DEPENDS Init_shared leancpp
-    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared LEAN_SHELL="$<TARGET_OBJECTS:shell>" LEAN_INITIALIZE="$<TARGET_OBJECTS:initialize>"
+    DEPENDS Init_shared leancpp shell initialize
+    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared
     VERBATIM)
 
   string(APPEND CMAKE_EXE_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")

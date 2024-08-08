@@ -66,7 +66,9 @@ endif
 
 Init_shared: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX}
 
-${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX}: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/libLean.a.export ${LIB}/lean/libleancpp.a #$(LEAN_SHELL)
+LEAN_SHELL = ${CMAKE_BINARY_DIR}/util/CMakeFiles/util.dir/shell.cpp.o
+LEAN_INITIALIZE = ${CMAKE_BINARY_DIR}/initialize/CMakeFiles/initialize.dir/init.cpp.o
+${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX}: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/libLean.a.export ${LIB}/lean/libleancpp.a $(LEAN_SHELL) $(LEAN_INITIALIZE)
 	@echo "[    ] Building $@"
 ifeq "${CMAKE_SYSTEM_NAME}" "Windows"
 # on Windows, must remove file before writing a new one (since the old one may be in use)
@@ -75,13 +77,13 @@ ifeq "${CMAKE_SYSTEM_NAME}" "Windows"
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} \
 	  ${LIB}/temp/Lean/Meta/WHNF.o.export -Wl,--start-group ${LIB}/temp/libLean.a.export -Wl,--whole-archive ${LIB}/temp/libleancpp_1.a -Wl,--no-whole-archive -Wl,--end-group -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared_1.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS} -Wl,-Map=${LIB}/temp/libleanshared_1.map
 	cp ${LIB}/temp/libLean.a.export ${LIB}/temp/libleanshared.a.export
-	cat ${LIB}/temp/libleanshared_1.map 
+	cat ${LIB}/temp/libleanshared_1.map
 	echo "===="
-	sed -En 's/.*(\.\.[^:]*).*/\1/' ${LIB}/temp/libleanshared_1.map > ${LIB}/temp/libleanshared.a.export.in
+	sed -En 's/.*(\.\.[^:]*).*/\1/p' ${LIB}/temp/libleanshared_1.map > ${LIB}/temp/libleanshared.a.export.in
 	cat ${LIB}/temp/libleanshared.a.export.in
 	echo "===="
 	"${CMAKE_AR}" tP ${LIB}/temp/libleanshared.a.export
-	 "${CMAKE_AR}" dP ${LIB}/temp/libleanshared.a.export ${LIB}/temp/Lean/Meta/WHNF.o.export @${LIB}/temp/libleanshared.a.export.in
+	"${CMAKE_AR}" dP ${LIB}/temp/libleanshared.a.export ${LIB}/temp/Lean/Meta/WHNF.o.export @${LIB}/temp/libleanshared.a.export.in
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
 	  ${LIB}/temp/Lean.o.export $(LEAN_SHELL) $(LEAN_INITIALIZE) ${LIB}/temp/libleanshared.a.export -lleanshared_1 -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 else
@@ -89,7 +91,7 @@ else
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/empty.c ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 ifeq "${CMAKE_SYSTEM_NAME}" "Darwin"
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
-	  ${LIB}/temp/Lean.o $(LEAN_SHELL) $(LEAN_INITIALIZE) -lInit -lStd -lLean -lleancpp ${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	  ${LIB}/temp/Lean.o ${LEAN_SHELL} ${LEAN_INITIALIZE} -lInit -lStd -lLean -lleancpp ${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 else
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ -v \
 	  -Wl,--whole-archive ${LIB}/temp/Lean.o $(LEAN_SHELL) $(LEAN_INITIALIZE) -Wl,--no-whole-archive -Wl,--start-group -lInit -lStd -lLean -lleancpp -Wl,--end-group ${CMAKE_BINARY_DIR}/runtime/libleanrt_initial-exec.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
@@ -102,6 +104,7 @@ Lake:
 # lake is in its own subdirectory, so must adjust relative paths...
 	+"${LEAN_BIN}/leanmake" -C lake bin lib PKG=Lake BIN_NAME=lake${CMAKE_EXECUTABLE_SUFFIX} $(LEANMAKE_OPTS) LINK_OPTS='${CMAKE_EXE_LINKER_FLAGS_MAKE_MAKE}' OUT="../${LIB}" LIB_OUT="../${LIB}/lean" OLEAN_OUT="../${LIB}/lean"
 
+LEAN_MAIN = ${CMAKE_BINARY_DIR}/shell/CMakeFiles/shell.dir/lean.cpp.o
 ${CMAKE_BINARY_DIR}/bin/lean${CMAKE_EXECUTABLE_SUFFIX}: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX} $(LEAN_MAIN)
 	@echo "[    ] Building $@"
 # on Windows, must remove file before writing a new one (since the old one may be in use)
