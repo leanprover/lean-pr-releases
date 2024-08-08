@@ -462,7 +462,10 @@ endif()
 
 add_subdirectory(initialize)
 add_subdirectory(shell)
-add_library(shell OBJECT util/shell.cpp)
+add_library(leanshared-static STATIC $<TARGET_OBJECTS:initialize> util/shell.cpp)
+set_target_properties(leanshared-static PROPERTIES
+  ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
+  OUTPUT_NAME leanshared)
 
 if(${STAGE} GREATER 1)
   # reuse C++ parts, which don't change
@@ -550,31 +553,19 @@ endif()
 # We declare these as separate custom targets so they use separate `make` invocations, which makes `make` recompute which dependencies
 # (e.g. `libLean.a`) are now newer than the target file
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
-  # dummy targets, see `MAIN_MODULE` discussion above
-  add_custom_target(Init_shared ALL
-    DEPENDS make_stdlib leanrt_initial-exec
-    COMMAND touch ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX}
-  )
-  add_custom_target(leanshared ALL
-    DEPENDS Init_shared leancpp
-    COMMAND touch ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX}
-  )
-else()
-  add_custom_target(Init_shared ALL
-    WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
-    DEPENDS make_stdlib leanrt_initial-exec
-    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make Init_shared
-    VERBATIM)
+add_custom_target(Init_shared ALL
+  WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
+  DEPENDS make_stdlib leanrt_initial-exec
+  COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make Init_shared
+  VERBATIM)
 
-  add_custom_target(leanshared ALL
-    WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
-    DEPENDS Init_shared leancpp shell initialize
-    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared
-    VERBATIM)
+add_custom_target(leanshared ALL
+  WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
+  DEPENDS Init_shared leancpp leanshared-static
+  COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared
+  VERBATIM)
 
-  string(APPEND CMAKE_EXE_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")
-endif()
+string(APPEND CMAKE_EXE_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")
 
 if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
   add_custom_target(lake ALL

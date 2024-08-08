@@ -3,7 +3,10 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 set(SRC ${SRC} manifest.rc)
 endif()
 
-add_library(main OBJECT ${SRC})
+add_library(leanmain STATIC ${SRC})
+set_target_properties(leanmain PROPERTIES
+  ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
+  OUTPUT_NAME leanmain)
 
 if(LLVM)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
@@ -28,7 +31,7 @@ endif()
 
 add_custom_target(lean ALL
   WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
-  DEPENDS leanshared main
+  DEPENDS leanshared leanmain
   COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make lean
   COMMAND_EXPAND_LISTS)
 
