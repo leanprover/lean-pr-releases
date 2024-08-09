@@ -580,7 +580,7 @@ else()
 
   add_custom_target(leanshared ALL
     WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
-    DEPENDS Init_shared leancpp_1 leancpp leanshared-static
+    DEPENDS Init_shared leancpp_1 leancpp leanshell leaninitialize
     COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared
     VERBATIM)
 
