@@ -41,7 +41,7 @@ lib.warn "The Nix-based build is deprecated" rec {
   leancpp = buildCMake {
     name = "leancpp";
     src = src + "/src";
-    buildFlags = [ "leancpp" "leanrt" "leanrt_initial-exec" "leanshared-static" "leanmain" ];
+    buildFlags = [ "leancpp" "leanrt" "leanrt_initial-exec" "leanshell" "leanmain" ];
     installPhase = ''
       mkdir -p $out
       mv lib/ $out/
@@ -120,7 +120,7 @@ lib.warn "The Nix-based build is deprecated" rec {
       leanshared = runCommand "leanshared" { buildInputs = [ stdenv.cc ]; libName = "libleanshared${stdenv.hostPlatform.extensions.sharedLibrary}"; } ''
         mkdir $out
         LEAN_CC=${stdenv.cc}/bin/cc ${lean-bin-tools-unwrapped}/bin/leanc -shared ${lib.optionalString stdenv.isLinux "-Wl,-Bsymbolic"} \
-          -Wl,--whole-archive ${leancpp}/lib/temp/libleanshared.a -lInit -lStd -lLean -lleancpp ${leancpp}/lib/libleanrt_initial-exec.a -Wl,--no-whole-archive -lstdc++ \
+          -Wl,--whole-archive ${leancpp}/lib/temp/libleanshell.a -lInit -lStd -lLean -lleancpp ${leancpp}/lib/libleanrt_initial-exec.a -Wl,--no-whole-archive -lstdc++ \
           -lm ${stdlibLinkFlags} \
           $(${llvmPackages.libllvm.dev}/bin/llvm-config --ldflags --libs) \
           -o $out/$libName

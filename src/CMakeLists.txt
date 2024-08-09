@@ -462,12 +462,16 @@ endif()
 
 add_subdirectory(initialize)
 add_subdirectory(shell)
-# "roots" of libleanshared: `lean_initialize` referenced by generated code and `lean_main`
-# referenced by the `lean` executable
-add_library(leanshared-static STATIC $<TARGET_OBJECTS:initialize> util/shell.cpp)
-set_target_properties(leanshared-static PROPERTIES
+# to be included in `leanshared` but not the smaller `leanshared_1` (as they would pull
+# in the world)
+add_library(leaninitialize STATIC $<TARGET_OBJECTS:initialize>)
+set_target_properties(leaninitialize PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
-  OUTPUT_NAME leanshared)
+  OUTPUT_NAME leaninitialize)
+add_library(leanshell STATIC $<TARGET_OBJECTS:initialize> util/shell.cpp)
+set_target_properties(leanshell PROPERTIES
+  ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
+  OUTPUT_NAME leanshell)
 
 if(${STAGE} GREATER 1)
   # reuse C++ parts, which don't change
@@ -531,7 +535,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
   # simple. (And we are not interested in `Lake` anyway.) To use dynamic
   # linking, we would probably have to set MAIN_MODULE=2 on `leanshared`,
   # SIDE_MODULE=2 on `lean`, and set CMAKE_SHARED_LIBRARY_SUFFIX to ".js".
-  string(APPEND LEAN_EXE_LINKER_FLAGS " ${LIB}/temp/libleanshared.a ${TOOLCHAIN_STATIC_LINKER_FLAGS} ${EMSCRIPTEN_SETTINGS} -lnodefs.js -s EXIT_RUNTIME=1 -s MAIN_MODULE=1 -s LINKABLE=1 -s EXPORT_ALL=1")
+  string(APPEND LEAN_EXE_LINKER_FLAGS " ${LIB}/temp/libleanshell.a ${TOOLCHAIN_STATIC_LINKER_FLAGS} ${EMSCRIPTEN_SETTINGS} -lnodefs.js -s EXIT_RUNTIME=1 -s MAIN_MODULE=1 -s LINKABLE=1 -s EXPORT_ALL=1")
 endif()
 
 # Build the compiler using the bootstrapped C sources for stage0, and use
