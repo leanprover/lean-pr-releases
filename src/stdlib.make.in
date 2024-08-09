@@ -81,7 +81,7 @@ ifeq "${CMAKE_SYSTEM_NAME}" "Windows"
 	"${CMAKE_AR}" dP ${LIB}/temp/diff.a @${LIB}/temp/diff.a.in
 # now include Lean and the diff library in `leanshared`
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o $@ \
-	  ${LIB}/temp/Lean.o.export -Wl,--whole-archive ${LIB}/temp/diff.a ${LIB}/temp/libleanshared.a -Wl,--no-whole-archive -lleanshared_1 -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
+	  -Wl,--whole-archive ${LIB}/temp/diff.a ${LIB}/temp/libleanshared.a -Wl,--no-whole-archive -lleanshared_1 -lInit_shared -Wl,--out-implib,${LIB}/lean/libleanshared.dll.a ${LEANSHARED_LINKER_FLAGS} ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}
 else
 # create empty library on platforms without restrictive symbol limits; avoids costly indirections and troubles with cross-library exceptions
 	"${CMAKE_BINARY_DIR}/leanc.sh" -shared -o ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared_1${CMAKE_SHARED_LIBRARY_SUFFIX} ${LIB}/temp/empty.c ${TOOLCHAIN_SHARED_LINKER_FLAGS} ${LEANC_OPTS}

@@ -41,7 +41,7 @@ lib.warn "The Nix-based build is deprecated" rec {
   leancpp = buildCMake {
     name = "leancpp";
     src = src + "/src";
-    buildFlags = [ "leancpp" "leanrt" "leanrt_initial-exec" "shell" ];
+    buildFlags = [ "leancpp" "leanrt" "leanrt_initial-exec" "leanshared-static" "leanmain" ];
     installPhase = ''
       mkdir -p $out
       mv lib/ $out/
