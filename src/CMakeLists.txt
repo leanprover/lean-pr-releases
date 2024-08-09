@@ -402,7 +402,7 @@ endif()
 # executable or `leanshared`, plugins would try to look them up at load time (even though they
 # are already loaded) and probably fail unless we set up LD_LIBRARY_PATH.
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  # import libraries created by the `leanshared` target
+  # import libraries created by the stdlib.make targets
   string(APPEND LEANC_SHARED_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")
 elseif("${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
   string(APPEND LEANC_SHARED_LINKER_FLAGS " -Wl,-undefined,dynamic_lookup")
@@ -462,6 +462,8 @@ endif()
 
 add_subdirectory(initialize)
 add_subdirectory(shell)
+# "roots" of libleanshared: `lean_initialize` referenced by generated code and `lean_main`
+# referenced by the `lean` executable
 add_library(leanshared-static STATIC $<TARGET_OBJECTS:initialize> util/shell.cpp)
 set_target_properties(leanshared-static PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
@@ -506,6 +508,8 @@ else()
   add_subdirectory(library/compiler)
   set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:compiler>)
 
+  # leancpp without `initialize`: used for building incrementally larger DLLs on Windows
+  # (`initialize` would pull in the world)
   add_library(leancpp_1 STATIC ${LEAN_OBJS})
   set_target_properties(leancpp_1 PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
@@ -527,7 +531,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
   # simple. (And we are not interested in `Lake` anyway.) To use dynamic
   # linking, we would probably have to set MAIN_MODULE=2 on `leanshared`,
   # SIDE_MODULE=2 on `lean`, and set CMAKE_SHARED_LIBRARY_SUFFIX to ".js".
-  string(APPEND LEAN_EXE_LINKER_FLAGS " -lnodefs.js -s EXIT_RUNTIME=1 -s MAIN_MODULE=1 -s LINKABLE=1 -s EXPORT_ALL=1")
+  string(APPEND LEAN_EXE_LINKER_FLAGS " ${TOOLCHAIN_STATIC_LINKER_FLAGS} ${EMSCRIPTEN_SETTINGS} -lnodefs.js -s EXIT_RUNTIME=1 -s MAIN_MODULE=1 -s LINKABLE=1 -s EXPORT_ALL=1")
 endif()
 
 # Build the compiler using the bootstrapped C sources for stage0, and use
@@ -553,19 +557,31 @@ endif()
 # We declare these as separate custom targets so they use separate `make` invocations, which makes `make` recompute which dependencies
 # (e.g. `libLean.a`) are now newer than the target file
 
-add_custom_target(Init_shared ALL
-  WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
-  DEPENDS make_stdlib leanrt_initial-exec
-  COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make Init_shared
-  VERBATIM)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
+  # dummy targets, see `MAIN_MODULE` discussion above
+  add_custom_target(Init_shared ALL
+    DEPENDS make_stdlib leanrt_initial-exec
+    COMMAND touch ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libInit_shared${CMAKE_SHARED_LIBRARY_SUFFIX}
+  )
+  add_custom_target(leanshared ALL
+    DEPENDS Init_shared leancpp
+    COMMAND touch ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libleanshared${CMAKE_SHARED_LIBRARY_SUFFIX}
+  )
+else()
+  add_custom_target(Init_shared ALL
+    WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
+    DEPENDS make_stdlib leanrt_initial-exec
+    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make Init_shared
+    VERBATIM)
 
-add_custom_target(leanshared ALL
-  WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
-  DEPENDS Init_shared leancpp leanshared-static
-  COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared
-  VERBATIM)
+  add_custom_target(leanshared ALL
+    WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
+    DEPENDS Init_shared leancpp_1 leancpp leanshared-static
+    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanshared
+    VERBATIM)
 
-string(APPEND CMAKE_EXE_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")
+  string(APPEND CMAKE_EXE_LINKER_FLAGS " -lInit_shared -lleanshared_1 -lleanshared")
+endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
   add_custom_target(lake ALL
