@@ -472,6 +472,9 @@ add_library(leanshell STATIC util/shell.cpp)
 set_target_properties(leanshell PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
   OUTPUT_NAME leanshell)
+if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  string(APPEND CMAKE_EXE_LINKER_FLAGS " -Wl,--whole-archive -lleanmanifest -Wl,--no-whole-archive")
+endif()
 
 if(${STAGE} GREATER 1)
   # reuse C++ parts, which don't change
