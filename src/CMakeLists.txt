@@ -468,7 +468,7 @@ add_library(leaninitialize STATIC $<TARGET_OBJECTS:initialize>)
 set_target_properties(leaninitialize PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
   OUTPUT_NAME leaninitialize)
-add_library(leanshell STATIC $<TARGET_OBJECTS:initialize> util/shell.cpp)
+add_library(leanshell STATIC util/shell.cpp)
 set_target_properties(leanshell PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/temp
   OUTPUT_NAME leanshell)
