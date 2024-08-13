@@ -435,13 +435,17 @@ static inline void lean_inc_ref_n(lean_object * o, size_t n) {
     }
 }
 
-LEAN_EXPORT void lean_dec_ref_cold(lean_object * o);
+LEAN_EXPORT void lean_del(lean_object * o);
 
 static inline void lean_dec_ref(lean_object * o) {
     if (LEAN_LIKELY(o->m_rc > 1)) {
         o->m_rc--;
+    } else if (o->m_rc == 1) {
+        lean_del(o);
     } else if (o->m_rc != 0) {
-        lean_dec_ref_cold(o);
+        if (std::atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, std::memory_order_acq_rel) == -1) {
+            lean_del(o);
+        }
     }
 }
 static inline void lean_inc(lean_object * o) { if (!lean_is_scalar(o)) lean_inc_ref(o); }
