@@ -443,7 +443,12 @@ static inline void lean_dec_ref(lean_object * o) {
     } else if (o->m_rc == 1) {
         lean_del(o);
     } else if (o->m_rc != 0) {
-        if (std::atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, std::memory_order_acq_rel) == -1) {
+#ifdef __cplusplus
+        int rc = std::atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, std::memory_order_relaxed);
+#else
+        int rc = atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, memory_order_relaxed);
+#endif
+        if (n == -1) {
             lean_del(o);
         }
     }
