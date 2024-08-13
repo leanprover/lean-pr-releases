@@ -448,7 +448,7 @@ static inline void lean_dec_ref(lean_object * o) {
 #else
         int rc = atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, memory_order_relaxed);
 #endif
-        if (n == -1) {
+        if (rc == -1) {
             lean_del(o);
         }
     }
