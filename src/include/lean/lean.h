@@ -440,7 +440,7 @@ LEAN_EXPORT void lean_del(lean_object * o);
 
 static inline void lean_dec_ref(lean_object * o) {
     if (LEAN_LIKELY(o->m_rc != 0)) {
-        if (LEAN_LIKELY(o->m_rc > 1)) {
+        if (LEAN_LIKELY(o->m_rc > 0)) {
             o->m_rc--;
         } else {
 #ifdef __cplusplus
