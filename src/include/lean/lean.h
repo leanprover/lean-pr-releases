@@ -17,6 +17,7 @@ Author: Leonardo de Moura
 #define LEAN_USING_STD using namespace std; /* NOLINT */
 extern "C" {
 #else
+#include <stdatomic.h>
 #define  LEAN_USING_STD
 #endif
 #include <lean/config.h>
