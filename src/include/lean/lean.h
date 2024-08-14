@@ -439,17 +439,17 @@ static inline void lean_inc_ref_n(lean_object * o, size_t n) {
 LEAN_EXPORT void lean_del(lean_object * o);
 
 static inline void lean_dec_ref(lean_object * o) {
-    if (LEAN_LIKELY(o->m_rc > 1)) {
-        o->m_rc--;
-    } else if (o->m_rc == 1) {
-        lean_del(o);
-    } else if (o->m_rc != 0) {
+    if (LEAN_LIKELY(o->m_rc != 0)) {
+        if (LEAN_LIKELY(o->m_rc > 1)) {
+            o->m_rc--;
+        } else {
 #ifdef __cplusplus
-        int rc = std::atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, std::memory_order_relaxed);
+            std::atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, std::memory_order_relaxed);
 #else
-        int rc = atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, memory_order_relaxed);
+            atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, memory_order_relaxed);
 #endif
-        if (rc == -1) {
+        }
+        if (LEAN_UNLIKELY(o->m_rc == 0)) {
             lean_del(o);
         }
     }
