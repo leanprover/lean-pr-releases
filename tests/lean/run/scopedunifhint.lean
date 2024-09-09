@@ -55,13 +55,13 @@ local infix:65 (priority := high) "*" => mul
 
 /--
 error: application type mismatch
-  ?m.2484*x
+  ?m.2492*x
 argument
   x
 has type
   Nat : Type
 but is expected to have type
-  ?m.2472.α : Type ?u.2471
+  ?m.2480.α : Type ?u.2479
 -/
 #guard_msgs in
 #check x*x -- Error: unification hint is not active
@@ -73,13 +73,13 @@ open Algebra -- activate unification hints
 
 /--
 error: application type mismatch
-  ?m.2585*(x, x)
+  ?m.2593*(x, x)
 argument
   (x, x)
 has type
   Nat × Nat : Type
 but is expected to have type
-  ?m.2565.α : Type ?u.2564
+  ?m.2573.α : Type ?u.2572
 -/
 #guard_msgs in
 #check mul (x, x) (x, x) -- still error
@@ -101,13 +101,13 @@ end Sec1
 
 /--
 error: application type mismatch
-  ?m.2832*(x, x)
+  ?m.2840*(x, x)
 argument
   (x, x)
 has type
   Nat × Nat : Type
 but is expected to have type
-  ?m.2812.α : Type ?u.2811
+  ?m.2820.α : Type ?u.2819
 -/
 #guard_msgs in
 #check (x, x) * (x, x) -- error, local hint is not active after end of section anymore
