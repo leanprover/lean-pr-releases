@@ -267,6 +267,22 @@ theorem getElem_of_mem {a : α} {as : Array α} :
   exists i
   exists hbound
 
+@[simp] theorem mem_dite_empty_left {x : α} [Decidable p] {l : ¬ p → Array α} :
+    (x ∈ if h : p then #[] else l h) ↔ ∃ h : ¬ p, x ∈ l h := by
+  split <;> simp_all [mem_def]
+
+@[simp] theorem mem_dite_empty_right {x : α} [Decidable p] {l : p → Array α} :
+    (x ∈ if h : p then l h else #[]) ↔ ∃ h : p, x ∈ l h := by
+  split <;> simp_all [mem_def]
+
+@[simp] theorem mem_ite_empty_left {x : α} [Decidable p] {l : Array α} :
+    (x ∈ if p then #[] else l) ↔ ¬ p ∧ x ∈ l := by
+  split <;> simp_all [mem_def]
+
+@[simp] theorem mem_ite_empty_right {x : α} [Decidable p] {l : Array α} :
+    (x ∈ if p then l else #[]) ↔ p ∧ x ∈ l := by
+  split <;> simp_all [mem_def]
+
 /-- # get lemmas -/
 
 theorem lt_of_getElem {x : α} {a : Array α} {idx : Nat} {hidx : idx < a.size} (_ : a[idx] = x) :
@@ -687,7 +703,7 @@ theorem get_modify {arr : Array α} {x i} (h : i < arr.size) :
   | cons => split <;> simp [*]
 
 @[simp] theorem filter_filter (q) (l : Array α) :
-    filter p (filter q l) = filter (fun a => p a ∧ q a) l := by
+    filter p (filter q l) = filter (fun a => p a && q a) l := by
   apply ext'
   simp only [filter_data, List.filter_filter]
 

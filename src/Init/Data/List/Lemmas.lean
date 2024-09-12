@@ -398,6 +398,22 @@ theorem exists_mem_of_ne_nil (l : List α) (h : l ≠ []) : ∃ x, x ∈ l :=
 theorem eq_nil_iff_forall_not_mem {l : List α} : l = [] ↔ ∀ a, a ∉ l := by
   cases l <;> simp [-not_or]
 
+@[simp] theorem mem_dite_nil_left {x : α} [Decidable p] {l : ¬ p → List α} :
+    (x ∈ if h : p then [] else l h) ↔ ∃ h : ¬ p, x ∈ l h := by
+  split <;> simp_all
+
+@[simp] theorem mem_dite_nil_right {x : α} [Decidable p] {l : p → List α} :
+    (x ∈ if h : p then l h else []) ↔ ∃ h : p, x ∈ l h := by
+  split <;> simp_all
+
+@[simp] theorem mem_ite_nil_left {x : α} [Decidable p] {l : List α} :
+    (x ∈ if p then [] else l) ↔ ¬ p ∧ x ∈ l := by
+  split <;> simp_all
+
+@[simp] theorem mem_ite_nil_right {x : α} [Decidable p] {l : List α} :
+    (x ∈ if p then l else []) ↔ p ∧ x ∈ l := by
+  split <;> simp_all
+
 theorem eq_of_mem_singleton : a ∈ [b] → a = b
   | .head .. => rfl
 
@@ -1254,7 +1270,7 @@ theorem forall_mem_filter {l : List α} {p : α → Bool} {P : α → Prop} :
 
 @[deprecated forall_mem_filter (since := "2024-07-25")] abbrev forall_mem_filter_iff := @forall_mem_filter
 
-@[simp] theorem filter_filter (q) : ∀ l, filter p (filter q l) = filter (fun a => p a ∧ q a) l
+@[simp] theorem filter_filter (q) : ∀ l, filter p (filter q l) = filter (fun a => p a && q a) l
   | [] => rfl
   | a :: l => by by_cases hp : p a <;> by_cases hq : q a <;> simp [hp, hq, filter_filter _ l]
 
