@@ -202,7 +202,7 @@ def getListLit? (e : Expr) : MetaM (Option (Array Expr)) := getListLitOf? e fun 
 
 /--
 Check if an expression is an array literal
-(i.e. `List.toArray` applied to a nested chain of `List.cons`, ending at a `List.nil`),
+(i.e. `Array.mk` applied to a nested chain of `List.cons`, ending at a `List.nil`),
 where each element is "recognised" by a given function `f : Expr → MetaM (Option α)`,
 and return the array of recognised values.
 -/
@@ -214,7 +214,7 @@ def getArrayLitOf? (e : Expr) (f : Expr → MetaM (Option α)) : MetaM (Option (
 
 /--
 Check if an expression is an array literal
-(i.e. `List.toArray` applied to a nested chain of `List.cons`, ending at a `List.nil`),
+(i.e. `Array.mk` applied to a nested chain of `List.cons`, ending at a `List.nil`),
 returning the array of `Expr` values.
 -/
 def getArrayLit? (e : Expr) : MetaM (Option (Array Expr)) := getArrayLitOf? e fun s => return some s
