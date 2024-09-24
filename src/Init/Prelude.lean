@@ -2734,7 +2734,7 @@ def List.redLength : List α → Nat
 /-- Convert a `List α` into an `Array α`. This is O(n) in the length of the list.  -/
 -- This function is exported to C, where it is called by `Array.mk`
 -- (the constructor) to implement this functionality.
-@[inline, pp_nodot, export lean_list_to_array_impl]
+@[inline, match_pattern, pp_nodot, export lean_list_to_array_impl]
 def List.toArrayImpl (as : List α) : Array α :=
   as.toArrayAux (Array.mkEmpty as.redLength)
 
