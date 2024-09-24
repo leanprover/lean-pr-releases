@@ -12,10 +12,6 @@ set_option linter.missingDocs true -- keep it documented
 
 universe u v w
 
-@[inherit_doc Array.mk]
-abbrev List.toArray (xs : List α) : Array α :=
-  .mk xs
-
 /--
 `inline (f x)` is an indication to the compiler to inline the definition of `f`
 at the application site itself (by comparison to the `@[inline]` attribute,
