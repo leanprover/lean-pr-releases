@@ -158,7 +158,7 @@ instance [ToExpr α] : ToExpr (List α) :=
 
 instance [ToExpr α] : ToExpr (Array α) :=
   let type := toTypeExpr α
-  { toExpr     := fun as => mkApp2 (mkConst ``Array.mk [levelZero]) type (toExpr as.toList),
+  { toExpr     := fun as => mkApp2 (mkConst ``List.toArray [levelZero]) type (toExpr as.toList),
     toTypeExpr := mkApp (mkConst ``Array [levelZero]) type }
 
 instance [ToExpr α] [ToExpr β] : ToExpr (α × β) :=
