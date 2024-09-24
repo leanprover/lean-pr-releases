@@ -18,7 +18,7 @@ universe u v w
 syntax "#[" withoutPosition(sepBy(term, ", ")) "]" : term
 
 macro_rules
-  | `(#[ $elems,* ]) => `(Array.mk [ $elems,* ])
+  | `(#[ $elems,* ]) => `(List.toArray [ $elems,* ])
 
 variable {α : Type u}
 
