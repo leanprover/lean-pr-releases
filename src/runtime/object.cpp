@@ -363,11 +363,11 @@ object * array_mk_empty() {
     return g_array_empty;
 }
 
-extern "C" object * lean_list_to_array(object *, object *);
+extern "C" object * lean_list_to_array_impl(object *, object *);
 extern "C" object * lean_array_to_list_impl(object *, object *);
 
 extern "C" LEAN_EXPORT object * lean_array_mk(lean_obj_arg lst) {
-    return lean_list_to_array(lean_box(0), lst);
+    return lean_list_to_array_impl(lean_box(0), lst);
 }
 
 extern "C" LEAN_EXPORT lean_object * lean_array_to_list(lean_obj_arg a) {

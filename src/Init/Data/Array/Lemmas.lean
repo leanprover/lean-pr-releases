@@ -68,14 +68,12 @@ open Array
     (a.toArrayAux b).size = b.size + a.length := by
   simp [size]
 
-@[simp] theorem toArray_toList : (a : Array α) → a.toList.toArray = a
-  | ⟨l⟩ => ext' (toList_toArray l)
+@[simp] theorem toArray_toList (a : Array α) : a.toList.toArray = a := rfl
 
 @[simp] theorem getElem_toArray {a : List α} {i : Nat} (h : i < a.toArray.size) :
     a.toArray[i] = a[i]'(by simpa using h) := by
   have h₁ := mk_eq_toArray a
-  have h₂ := getElem_mk (by simpa using h)
-  simpa [h₁] using h₂
+  simp [h₁]
 
 @[simp] theorem toArray_concat {as : List α} {x : α} :
     (as ++ [x]).toArray = as.toArray.push x := by

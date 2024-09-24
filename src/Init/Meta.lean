@@ -1083,7 +1083,7 @@ private def quoteArray [Quote α `term] (xs : Array α) : Term :=
   if xs.size <= 8 then
     go 0 #[]
   else
-    Syntax.mkCApp ``List.toArray #[quote xs.toList]
+    Syntax.mkCApp ``Array.mk #[quote xs.toList]
 where
   go (i : Nat) (args : Array Term) : Term :=
     if h : i < xs.size then
