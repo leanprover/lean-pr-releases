@@ -19,11 +19,6 @@ This file contains some theorems about `Array` and `List` needed for `Init.Data.
 
 namespace Array
 
-/-- We avoid mentioning the constructor `Array.mk` directly, preferring `List.toArray`. -/
-@[simp] theorem mk_eq_toArray (as : List α) : Array.mk as = as.toArray := by
-  apply ext'
-  simp
-
 @[simp] theorem getElem_toList {a : Array α} {i : Nat} (h : i < a.size) : a.toList[i] = a[i] := rfl
 
 @[simp] theorem getElem_mk {xs : List α} {i : Nat} (h : i < xs.length) : (Array.mk xs)[i] = xs[i] := rfl
@@ -62,18 +57,11 @@ open Array
 
 /-! ### Lemmas about `List.toArray`. -/
 
-@[simp] theorem toArray_size (as : List α) : as.toArray.size = as.length := by simp [size]
-
-@[simp] theorem toArrayAux_size {a : List α} {b : Array α} :
+@[simp] theorem size_toArrayAux {a : List α} {b : Array α} :
     (a.toArrayAux b).size = b.size + a.length := by
   simp [size]
 
 @[simp] theorem toArray_toList (a : Array α) : a.toList.toArray = a := rfl
-
-@[simp] theorem getElem_toArray {a : List α} {i : Nat} (h : i < a.toArray.size) :
-    a.toArray[i] = a[i]'(by simpa using h) := by
-  have h₁ := mk_eq_toArray a
-  simp [h₁]
 
 @[simp] theorem toArray_concat {as : List α} {x : α} :
     (as ++ [x]).toArray = as.toArray.push x := by
