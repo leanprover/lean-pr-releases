@@ -209,7 +209,7 @@ and return the array of recognised values.
 def getArrayLitOf? (e : Expr) (f : Expr → MetaM (Option α)) : MetaM (Option (Array α)) := do
   let e ← instantiateMVars e.consumeMData
   match_expr e with
-  | List.toArray _ as => getListLitOf? as f
+  | Array.mk _ as => getListLitOf? as f
   | _ => return none
 
 /--
