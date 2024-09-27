@@ -1,16 +1,16 @@
 { lean, lean-leanDeps ? lean, lean-final ? lean, leanc,
-  stdenv, lib, coreutils, gnused, writeShellScriptBin, bash, lean-emacs, lean-vscode, nix, substituteAll, symlinkJoin, linkFarmFromDrvs,
+  stdenv, lib, coreutils, gnused, writeShellScriptBin, bash, substituteAll, symlinkJoin, linkFarmFromDrvs,
   runCommand, darwin, mkShell, ... }:
 let lean-final' = lean-final; in
 lib.makeOverridable (
 { name, src, fullSrc ? src, srcPrefix ? "", srcPath ? "$PWD/${srcPrefix}",
   # Lean dependencies. Each entry should be an output of buildLeanPackage.
-  deps ? [ lean.Lean ],
+  deps ? [ lean.Init lean.Std lean.Lean ],
   # Static library dependencies. Each derivation `static` should contain a static library in the directory `${static}`.
   staticLibDeps ? [],
   # Whether to wrap static library inputs in a -Wl,--start-group [...] -Wl,--end-group to ensure dependencies are resolved.
   groupStaticLibs ? false,
-  # Shared library dependencies included at interpretation with --load-dynlib and linked to. Each derivation `shared` should contain a 
+  # Shared library dependencies included at interpretation with --load-dynlib and linked to. Each derivation `shared` should contain a
   # shared library at the path `${shared}/${shared.libName or shared.name}` and a name to link to like `-l${shared.linkName or shared.name}`.
   # These libs are also linked to in packages that depend on this one.
   nativeSharedLibs ? [],
@@ -30,7 +30,7 @@ lib.makeOverridable (
   pluginDeps ? [],
   # `overrideAttrs` for `buildMod`
   overrideBuildModAttrs ? null,
-  debug ? false, leanFlags ? [], leancFlags ? [], linkFlags ? [], executableName ? lib.toLower name, libName ? name,
+  debug ? false, leanFlags ? [], leancFlags ? [], linkFlags ? [], executableName ? lib.toLower name, libName ? name, sharedLibName ? libName,
   srcTarget ? "..#stage0", srcArgs ? "(\${args[*]})", lean-final ? lean-final' }@args:
 with builtins; let
   # "Init.Core" ~> "Init/Core"
@@ -88,9 +88,9 @@ with builtins; let
   allNativeSharedLibs =
     lib.unique (lib.flatten (nativeSharedLibs ++ (map (dep: dep.allNativeSharedLibs or []) allExternalDeps)));
 
-  # A flattened list of all static library dependencies: this and every dep module's explicitly provided `staticLibDeps`, 
+  # A flattened list of all static library dependencies: this and every dep module's explicitly provided `staticLibDeps`,
   # plus every dep module itself: `dep.staticLib`
-  allStaticLibDeps = 
+  allStaticLibDeps =
     lib.unique (lib.flatten (staticLibDeps ++ (map (dep: [dep.staticLib] ++ dep.staticLibDeps or []) allExternalDeps)));
 
   pathOfSharedLib = dep: dep.libPath or "${dep}/${dep.libName or dep.name}";
@@ -176,7 +176,7 @@ with builtins; let
       # make local "copy" so `drv`'s Nix store path doesn't end up in ccache's hash
       ln -s ${drv.c}/${drv.cPath} src.c
       # on the other hand, a debug build is pretty fast anyway, so preserve the path for gdb
-      leanc -c -o $out/$oPath $leancFlags -fPIC ${if debug then "${drv.c}/${drv.cPath} -g" else "src.c -O3 -DNDEBUG"}
+      leanc -c -o $out/$oPath $leancFlags -fPIC ${if debug then "${drv.c}/${drv.cPath} -g" else "src.c -O3 -DNDEBUG -DLEAN_EXPORTING"}
     '';
   };
   mkMod = mod: deps:
@@ -197,19 +197,6 @@ with builtins; let
              then map (m: m.module) header.imports
              else abort "errors while parsing imports of ${mod}:\n${lib.concatStringsSep "\n" header.errors}";
     in mkMod mod (map (dep: if modDepsMap ? ${dep} then modCandidates.${dep} else externalModMap.${dep}) deps)) modDepsMap;
-  makeEmacsWrapper = name: emacs: lean: writeShellScriptBin name ''
-    ${emacs} --eval "(progn (setq lean4-rootdir \"${lean}\"))" "$@"
-  '';
-  makeVSCodeWrapper = name: lean: writeShellScriptBin name ''
-    PATH=${lean}/bin:$PATH ${lean-vscode}/bin/code "$@"
-  '';
-  printPaths = deps: writeShellScriptBin "print-paths" ''
-    echo '${toJSON {
-      oleanPath = [(depRoot "print-paths" deps)];
-      srcPath = ["."] ++ map (dep: dep.src) allExternalDeps;
-      loadDynlibPaths = map pathOfSharedLib (loadDynlibsOfDeps deps);
-    }}'
-  '';
   expandGlob = g:
     if typeOf g == "string" then [g]
     else if g.glob == "one" then [g.mod]
@@ -224,7 +211,8 @@ with builtins; let
   allLinkFlags = lib.foldr (shared: acc: acc ++ [ "-L${shared}" "-l${shared.linkName or shared.name}" ]) linkFlags allNativeSharedLibs;
 
   objects   = mapAttrs (_: m: m.obj) mods';
-  staticLib = runCommand "${name}-lib" { buildInputs = [ stdenv.cc.bintools.bintools ]; } ''
+  bintools = if stdenv.isDarwin then darwin.cctools else stdenv.cc.bintools.bintools;
+  staticLib = runCommand "${name}-lib" { buildInputs = [ bintools ]; } ''
     mkdir -p $out
     ar Trcs $out/lib${libName}.a ${lib.concatStringsSep " " (map (drv: "${drv}/${drv.oPath}") (attrValues objects))};
   '';
@@ -245,7 +233,7 @@ in rec {
   cTree     = symlinkJoin { name = "${name}-cTree"; paths = map (mod: mod.c) (attrValues mods); };
   oTree     = symlinkJoin { name = "${name}-oTree"; paths = (attrValues objects); };
   iTree     = symlinkJoin { name = "${name}-iTree"; paths = map (mod: mod.ilean) (attrValues mods); };
-  sharedLib = mkSharedLib "lib${libName}" ''
+  sharedLib = mkSharedLib "lib${sharedLibName}" ''
     ${if stdenv.isDarwin then "-Wl,-force_load,${staticLib}/lib${libName}.a" else "-Wl,--whole-archive ${staticLib}/lib${libName}.a -Wl,--no-whole-archive"} \
     ${lib.concatStringsSep " " (map (d: "${d.sharedLib}/*") deps)}'';
   executable = lib.makeOverridable ({ withSharedStdlib ? true }: let
@@ -256,48 +244,4 @@ in rec {
         -o $out/bin/${executableName} \
         ${lib.concatStringsSep " " allLinkFlags}
     '') {};
-
-  lean-package = writeShellScriptBin "lean" ''
-    LEAN_PATH=${modRoot}:$LEAN_PATH LEAN_SRC_PATH=$LEAN_SRC_PATH:${src} exec ${lean-final}/bin/lean "$@"
-  '';
-  emacs-package = makeEmacsWrapper "emacs-package" lean-package;
-  vscode-package = makeVSCodeWrapper "vscode-package" lean-package;
-
-  link-ilean = writeShellScriptBin "link-ilean" ''
-    dest=''${1:-.}
-    mkdir -p $dest/build/lib
-    ln -sf ${iTree}/* $dest/build/lib
-  '';
-
-  makePrintPathsFor = deps: mods: printPaths deps // mapAttrs (_: mod: makePrintPathsFor (deps ++ [mod]) mods) mods;
-  print-paths = makePrintPathsFor [] (mods' // externalModMap);
-  # `lean` wrapper that dynamically runs Nix for the actual `lean` executable so the same editor can be
-  # used for multiple projects/after upgrading the `lean` input/for editing both stage 1 and the tests
-  lean-bin-dev = substituteAll {
-    name = "lean";
-    dir = "bin";
-    src = ./lean-dev.in;
-    isExecutable = true;
-    srcRoot = fullSrc;  # use root flake.nix in case of Lean repo
-    inherit bash nix srcTarget srcArgs;
-  };
-  lake-dev = substituteAll {
-    name = "lake";
-    dir = "bin";
-    src = ./lake-dev.in;
-    isExecutable = true;
-    srcRoot = fullSrc;  # use root flake.nix in case of Lean repo
-    inherit bash nix srcTarget srcArgs;
-  };
-  lean-dev = symlinkJoin { name = "lean-dev"; paths = [ lean-bin-dev lake-dev ]; };
-  emacs-dev = makeEmacsWrapper "emacs-dev" "${lean-emacs}/bin/emacs" lean-dev;
-  emacs-path-dev = makeEmacsWrapper "emacs-path-dev" "emacs" lean-dev;
-  vscode-dev = makeVSCodeWrapper "vscode-dev" lean-dev;
-
-  devShell = mkShell {
-    buildInputs = [ nix ];
-    shellHook = ''
-      export LEAN_SRC_PATH="${srcPath}"
-    '';
-  };
 })

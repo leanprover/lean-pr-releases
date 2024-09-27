@@ -3,6 +3,7 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Parser.Basic
 namespace Lean.Parser
 
@@ -24,7 +25,7 @@ partial def interpolatedStrFn (p : ParserFn) : ParserFn := fun c s =>
         let s := mkNodeToken interpolatedStrLitKind startPos c s
         s.mkNode interpolatedStrKind stackSize
       else if curr == '\\' then
-        andthenFn (quotedCharCoreFn isQuotableCharForStrInterpolant) (parse startPos) c s
+        andthenFn (quotedCharCoreFn isQuotableCharForStrInterpolant true) (parse startPos) c s
       else if curr == '{' then
         let s := mkNodeToken interpolatedStrLitKind startPos c s
         let s := p c s
@@ -67,7 +68,7 @@ This parser has arity 1, and returns a `interpolatedStrKind` with an odd number 
 alternating between chunks of literal text and results from `p`. The literal chunks contain
 uninterpreted substrings of the input. For example, `"foo\n{2 + 2}"` would have three arguments:
 an atom `"foo\n{`, the parsed `2 + 2` term, and then the atom `}"`. -/
-def interpolatedStr (p : Parser) : Parser :=
+@[builtin_doc] def interpolatedStr (p : Parser) : Parser :=
   withAntiquot (mkAntiquot "interpolatedStr" interpolatedStrKind) $ interpolatedStrNoAntiquot p
 
 end Lean.Parser

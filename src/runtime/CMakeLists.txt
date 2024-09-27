@@ -2,7 +2,7 @@ set(RUNTIME_OBJS debug.cpp thread.cpp mpz.cpp utf8.cpp
 object.cpp apply.cpp exception.cpp interrupt.cpp memory.cpp
 stackinfo.cpp compact.cpp init_module.cpp load_dynlib.cpp io.cpp hash.cpp
 platform.cpp alloc.cpp allocprof.cpp sharecommon.cpp stack_overflow.cpp
-process.cpp object_ref.cpp mpn.cpp mutex.cpp)
+process.cpp object_ref.cpp mpn.cpp mutex.cpp libuv.cpp)
 add_library(leanrt_initial-exec STATIC ${RUNTIME_OBJS})
 set_target_properties(leanrt_initial-exec PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -15,6 +15,10 @@ set_target_properties(leanrt PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
 if (NOT MSVC)
 target_compile_options(leanrt PRIVATE -ftls-model=local-exec)
+endif()
+# We do not export Lean symbols when statically linking on Windows.
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+target_compile_options(leanrt PRIVATE -ULEAN_EXPORTING)
 endif()
 
 if(LLVM)

@@ -31,8 +31,7 @@ match env.find? ctorName with
 | some (ConstantInfo.ctorInfo v) => if args.size == v.numParams + v.numFields then return some (v, fn, args) else return none
 | _                              => return none
 
-private def constructorApp? (e : Expr) : MetaM (Option (ConstructorVal × Expr × Array Expr)) := do
-let env ← getEnv
+private def ctorApp? (e : Expr) : MetaM (Option (ConstructorVal × Expr × Array Expr)) := do
 match e with
 | Expr.lit (Literal.natVal n) =>
    if n == 0 then getConstructorVal `Nat.zero (mkConst `Nat.zero) #[] else getConstructorVal `Nat.succ (mkConst `Nat.succ) #[mkNatLit (n-1)]
@@ -70,7 +69,7 @@ partial def mkPattern : Expr → MetaM Pattern
       return Pattern.arrayLit elemType pats
     | none =>
       let e ← whnfD e
-      let r? ← constructorApp? e
+      let r? ← ctorApp? e
       match r? with
       | none      => throwError "unexpected pattern"
       | some (cval, fn, args) =>
@@ -93,7 +92,7 @@ partial def decodePats : Expr → MetaM (List Pattern)
 
 partial def decodeAltLHS (e : Expr) : MetaM AltLHS :=
 forallTelescopeReducing e fun args body => do
-  let decls ← args.toList.mapM (fun arg => getLocalDecl arg.fvarId!)
+  let decls ← args.toList.mapM (fun arg => arg.fvarId!.getDecl)
   let pats  ← decodePats body
   return { ref := Syntax.missing, fvarDecls := decls, patterns := pats }
 

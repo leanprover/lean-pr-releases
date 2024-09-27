@@ -3,6 +3,8 @@ Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
+import Lean.Meta.Diagnostics
 import Lean.Elab.Open
 import Lean.Elab.SetOption
 import Lean.Elab.Eval
@@ -98,6 +100,14 @@ private def elabOptLevel (stx : Syntax) : TermElabM Level :=
         else
           throwError "synthetic hole has already been defined with an incompatible local context"
 
+@[builtin_term_elab Lean.Parser.Term.omission] def elabOmission : TermElab := fun stx expectedType? => do
+  logWarning m!"\
+    The '⋯' token is used by the pretty printer to indicate omitted terms, and it should not be used directly. \
+    It logs this warning and then elaborates like `_`.\
+    \n\nThe presence of `⋯` in pretty printing output is controlled by the 'pp.deepTerms' and `pp.proofs` options. \
+    These options can be further adjusted using `pp.deepTerms.threshold` and `pp.proofs.threshold`."
+  elabHole stx expectedType?
+
 @[builtin_term_elab «letMVar»] def elabLetMVar : TermElab := fun stx expectedType? => do
   match stx with
   | `(let_mvar% ? $n := $e; $b) =>
@@ -147,9 +157,19 @@ private def mkTacticMVar (type : Expr) (tacticCode : Syntax) : TermElabM Expr :=
   registerSyntheticMVar ref mvarId <| SyntheticMVarKind.tactic tacticCode (← saveContext)
   return mvar
 
+register_builtin_option debug.byAsSorry : Bool := {
+  defValue := false
+  group    := "debug"
+  descr    := "replace `by ..` blocks with `sorry` IF the expected type is a proposition"
+}
+
 @[builtin_term_elab byTactic] def elabByTactic : TermElab := fun stx expectedType? => do
   match expectedType? with
-  | some expectedType => mkTacticMVar expectedType stx
+  | some expectedType =>
+    if ← pure (debug.byAsSorry.get (← getOptions)) <&&> isProp expectedType then
+      mkSorry expectedType false
+    else
+      mkTacticMVar expectedType stx
   | none =>
     tryPostpone
     throwError ("invalid 'by' tactic, expected type has not been provided")
@@ -157,7 +177,10 @@ private def mkTacticMVar (type : Expr) (tacticCode : Syntax) : TermElabM Expr :=
 @[builtin_term_elab noImplicitLambda] def elabNoImplicitLambda : TermElab := fun stx expectedType? =>
   elabTerm stx[1] (mkNoImplicitLambdaAnnotation <$> expectedType?)
 
-@[builtin_term_elab Lean.Parser.Term.cdot] def elabBadCDot : TermElab := fun _ _ =>
+@[builtin_term_elab Lean.Parser.Term.cdot] def elabBadCDot : TermElab := fun stx expectedType? => do
+  if stx[0].getAtomVal == "." then
+    -- Users may input bad cdots because they are trying to auto-complete them using the expected type
+    addCompletionInfo <| CompletionInfo.dotId stx .anonymous (← getLCtx) expectedType?
   throwError "invalid occurrence of `·` notation, it must be surrounded by parentheses (e.g. `(· + 1)`)"
 
 @[builtin_term_elab str] def elabStrLit : TermElab := fun stx _ => do
@@ -177,8 +200,18 @@ private def mkFreshTypeMVarFor (expectedType? : Option Expr) : TermElabM Expr :=
     | some val => pure val
     | none     => throwIllFormedSyntax
   let typeMVar ← mkFreshTypeMVarFor expectedType?
-  let u ← getDecLevel typeMVar
-  let mvar ← mkInstMVar (mkApp2 (Lean.mkConst ``OfNat [u]) typeMVar (mkRawNatLit val))
+  let u ← try
+    getDecLevel typeMVar
+  catch ex =>
+    match expectedType? with
+    | some expectedType =>
+      if (← isProp expectedType) then
+        throwError m!"numerals are data in Lean, but the expected type is a proposition{indentExpr expectedType} : Prop"
+      else
+        throwError m!"numerals are data in Lean, but the expected type is universe polymorphic and may be a proposition{indentExpr expectedType} : {← inferType expectedType}"
+    | none => throw ex
+  let extraMsg := m!"numerals are polymorphic in Lean, but the numeral `{val}` cannot be used in a context where the expected type is{indentExpr typeMVar}\ndue to the absence of the instance above"
+  let mvar ← mkInstMVar (mkApp2 (Lean.mkConst ``OfNat [u]) typeMVar (mkRawNatLit val)) extraMsg
   let r := mkApp3 (Lean.mkConst ``OfNat.ofNat [u]) typeMVar (mkRawNatLit val) mvar
   registerMVarErrorImplicitArgInfo mvar.mvarId! stx r
   return r
@@ -211,7 +244,7 @@ def elabScientificLit : TermElab := fun stx expectedType? => do
   | none     => throwIllFormedSyntax
 
 @[builtin_term_elab doubleQuotedName] def elabDoubleQuotedName : TermElab := fun stx _ =>
-  return toExpr (← resolveGlobalConstNoOverloadWithInfo stx[2])
+  return toExpr (← realizeGlobalConstNoOverloadWithInfo stx[2])
 
 @[builtin_term_elab declName] def elabDeclName : TermElab := adaptExpander fun _ => do
   let some declName ← getDeclName?
@@ -220,7 +253,7 @@ def elabScientificLit : TermElab := fun stx expectedType? => do
 
 @[builtin_term_elab Parser.Term.withDeclName] def elabWithDeclName : TermElab := fun stx expectedType? => do
   let id := stx[2].getId
-  let id := if stx[1].isNone then id else (← getCurrNamespace) ++ id
+  let id ← if stx[1].isNone then pure id else pure <| (← getCurrNamespace) ++ id
   let e := stx[3]
   withMacroExpansion stx e <| withDeclName id <| elabTerm e expectedType?
 
@@ -283,9 +316,7 @@ private def mkSilentAnnotationIfHole (e : Expr) : TermElabM Expr := do
           return false
     return true
   if canClear then
-    let lctx := (← getLCtx).erase fvarId
-    let localInsts := (← getLocalInstances).filter (·.fvar.fvarId! != fvarId)
-    withLCtx lctx localInsts do elabTerm body expectedType?
+    withErasedFVars #[fvarId] do elabTerm body expectedType?
   else
     elabTerm body expectedType?
 
@@ -300,9 +331,13 @@ private def mkSilentAnnotationIfHole (e : Expr) : TermElabM Expr := do
     popScope
 
 @[builtin_term_elab «set_option»] def elabSetOption : TermElab := fun stx expectedType? => do
-  let options ← Elab.elabSetOption stx[1] stx[2]
-  withTheReader Core.Context (fun ctx => { ctx with maxRecDepth := maxRecDepth.get options, options := options }) do
-    elabTerm stx[4] expectedType?
+  let options ← Elab.elabSetOption stx[1] stx[3]
+  withOptions (fun _ => options) do
+    try
+      elabTerm stx[5] expectedType?
+    finally
+      if stx[1].getId == `diagnostics then
+        reportDiag
 
 @[builtin_term_elab withAnnotateTerm] def elabWithAnnotateTerm : TermElab := fun stx expectedType? => do
   match stx with
@@ -326,5 +361,8 @@ private opaque evalFilePath (stx : Syntax) : TermElabM System.FilePath
     let path := srcDir / path
     mkStrLit <$> IO.FS.readFile path
   | _, _ => throwUnsupportedSyntax
+
+@[builtin_term_elab Lean.Parser.Term.namedPattern] def elabNamedPatternErr : TermElab := fun stx _ =>
+  throwError "`<identifier>@<term>` is a named pattern and can only be used in pattern matching contexts{indentD stx}"
 
 end Lean.Elab.Term

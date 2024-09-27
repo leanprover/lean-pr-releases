@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Meta.Tactic.Simp
-// Imports: Init Lean.Meta.Tactic.Simp.SimpTheorems Lean.Meta.Tactic.Simp.SimpCongrTheorems Lean.Meta.Tactic.Simp.Types Lean.Meta.Tactic.Simp.Main Lean.Meta.Tactic.Simp.Rewrite Lean.Meta.Tactic.Simp.SimpAll
+// Imports: Lean.Meta.Tactic.Simp.SimpTheorems Lean.Meta.Tactic.Simp.SimpCongrTheorems Lean.Meta.Tactic.Simp.Types Lean.Meta.Tactic.Simp.Main Lean.Meta.Tactic.Simp.Rewrite Lean.Meta.Tactic.Simp.SimpAll Lean.Meta.Tactic.Simp.Simproc Lean.Meta.Tactic.Simp.BuiltinSimprocs Lean.Meta.Tactic.Simp.RegisterCommand Lean.Meta.Tactic.Simp.Attr Lean.Meta.Tactic.Simp.Diagnostics
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -77,7 +77,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Meta", 4);
+x_1 = lean_mk_string_unchecked("Meta", 4, 4);
 return x_1;
 }
 }
@@ -85,7 +85,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Tactic", 6);
+x_1 = lean_mk_string_unchecked("Tactic", 6, 6);
 return x_1;
 }
 }
@@ -93,7 +93,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("simp", 4);
+x_1 = lean_mk_string_unchecked("simp", 4, 4);
 return x_1;
 }
 }
@@ -112,7 +112,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Lean", 4);
+x_1 = lean_mk_string_unchecked("Lean", 4, 4);
 return x_1;
 }
 }
@@ -130,7 +130,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("initFn", 6);
+x_1 = lean_mk_string_unchecked("initFn", 6, 6);
 return x_1;
 }
 }
@@ -148,7 +148,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("_@", 2);
+x_1 = lean_mk_string_unchecked("_@", 2, 2);
 return x_1;
 }
 }
@@ -196,7 +196,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Simp", 4);
+x_1 = lean_mk_string_unchecked("Simp", 4, 4);
 return x_1;
 }
 }
@@ -214,7 +214,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("_hyg", 4);
+x_1 = lean_mk_string_unchecked("_hyg", 4, 4);
 return x_1;
 }
 }
@@ -253,7 +253,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_43___
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("congr", 5);
+x_1 = lean_mk_string_unchecked("congr", 5, 5);
 return x_1;
 }
 }
@@ -294,7 +294,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_83___
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("discharge", 9);
+x_1 = lean_mk_string_unchecked("discharge", 9, 9);
 return x_1;
 }
 }
@@ -335,7 +335,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_123__
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("rewrite", 7);
+x_1 = lean_mk_string_unchecked("rewrite", 7, 7);
 return x_1;
 }
 }
@@ -376,7 +376,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_163__
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("unify", 5);
+x_1 = lean_mk_string_unchecked("unify", 5, 5);
 return x_1;
 }
 }
@@ -417,7 +417,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_203__
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("ground", 6);
+x_1 = lean_mk_string_unchecked("ground", 6, 6);
 return x_1;
 }
 }
@@ -458,7 +458,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_243__
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("numSteps", 8);
+x_1 = lean_mk_string_unchecked("numSteps", 8, 8);
 return x_1;
 }
 }
@@ -499,7 +499,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_282__
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("heads", 5);
+x_1 = lean_mk_string_unchecked("heads", 5, 5);
 return x_1;
 }
 }
@@ -540,7 +540,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_321__
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Debug", 5);
+x_1 = lean_mk_string_unchecked("Debug", 5, 5);
 return x_1;
 }
 }
@@ -611,21 +611,22 @@ x_5 = l_Lean_registerTraceClass(x_2, x_3, x_4, x_1);
 return x_5;
 }
 }
-lean_object* initialize_Init(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Tactic_Simp_SimpTheorems(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Tactic_Simp_SimpCongrTheorems(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Tactic_Simp_Types(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Tactic_Simp_Main(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Tactic_Simp_Rewrite(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Tactic_Simp_SimpAll(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Meta_Tactic_Simp_Simproc(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Meta_Tactic_Simp_BuiltinSimprocs(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Meta_Tactic_Simp_RegisterCommand(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Meta_Tactic_Simp_Attr(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Meta_Tactic_Simp_Diagnostics(uint8_t builtin, lean_object*);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_Lean_Meta_Tactic_Simp(uint8_t builtin, lean_object* w) {
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init(builtin, lean_io_mk_world());
-if (lean_io_result_is_error(res)) return res;
-lean_dec_ref(res);
 res = initialize_Lean_Meta_Tactic_Simp_SimpTheorems(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
@@ -642,6 +643,21 @@ res = initialize_Lean_Meta_Tactic_Simp_Rewrite(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = initialize_Lean_Meta_Tactic_Simp_SimpAll(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Meta_Tactic_Simp_Simproc(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Meta_Tactic_Simp_BuiltinSimprocs(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Meta_Tactic_Simp_RegisterCommand(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Meta_Tactic_Simp_Attr(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Meta_Tactic_Simp_Diagnostics(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____closed__1 = _init_l_Lean_initFn____x40_Lean_Meta_Tactic_Simp___hyg_4____closed__1();

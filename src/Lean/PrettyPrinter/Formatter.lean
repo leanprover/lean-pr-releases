@@ -3,6 +3,7 @@ Copyright (c) 2020 Sebastian Ullrich. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Sebastian Ullrich
 -/
+prelude
 import Lean.CoreM
 import Lean.Parser.Extension
 import Lean.Parser.StrInterpolation
@@ -128,11 +129,13 @@ def pushLine : FormatterM Unit :=
 def pushAlign (force : Bool) : FormatterM Unit :=
   pushWhitespace (.align force)
 
-/-- Execute `x` at the right-most child of the current node, if any, then advance to the left. -/
+/--
+Execute `x` at the right-most child of the current node, if any, then advance to the left.
+Runs `x` even if there are no children, in which case the current syntax node will be `.missing`.
+-/
 def visitArgs (x : FormatterM Unit) : FormatterM Unit := do
   let stx ← getCur
-  if stx.getArgs.size > 0 then
-    goDown (stx.getArgs.size - 1) *> x <* goUp
+  goDown (stx.getArgs.size - 1) *> x <* goUp
   goLeft
 
 /-- Execute `x`, pass array of generated Format objects to `fn`, and push result. -/
@@ -192,6 +195,12 @@ def withMaybeTag (pos? : Option String.Pos) (x : FormatterM Unit) : Formatter :=
     -- HACK: We have no (immediate) information on which side of the orelse could have produced the current node, so try
     -- them in turn. Uses the syntax traverser non-linearly!
     p1 <|> p2
+
+@[combinator_formatter recover]
+def recover.formatter (fmt : PrettyPrinter.Formatter) := fmt
+
+@[combinator_formatter recover']
+def recover'.formatter (fmt : PrettyPrinter.Formatter) := fmt
 
 -- `mkAntiquot` is quite complex, so we'd rather have its formatter synthesized below the actual parser definition.
 -- Note that there is a mutual recursion
@@ -411,7 +420,9 @@ def identNoAntiquot.formatter : Formatter := do
   let stx@(Syntax.ident info _ id _) ← getCur
     | throwError m!"not an ident: {← getCur}"
   let id := id.simpMacroScopes
-  withMaybeTag (getExprPos? stx) (pushToken info id.toString)
+  let table := (← read).table
+  let isToken (s : String) : Bool := (table.find? s).isSome
+  withMaybeTag (getExprPos? stx) (pushToken info (id.toString (isToken := isToken)))
   goLeft
 
 @[combinator_formatter rawIdentNoAntiquot] def rawIdentNoAntiquot.formatter : Formatter := do
@@ -447,7 +458,9 @@ def manyNoAntiquot.formatter (p : Formatter) : Formatter := do
 @[combinator_formatter many1NoAntiquot] def many1NoAntiquot.formatter (p : Formatter) : Formatter := manyNoAntiquot.formatter p
 
 @[combinator_formatter optionalNoAntiquot]
-def optionalNoAntiquot.formatter (p : Formatter) : Formatter := visitArgs p
+def optionalNoAntiquot.formatter (p : Formatter) : Formatter := do
+  let stx ← getCur
+  visitArgs <| unless stx.getArgs.isEmpty do p
 
 @[combinator_formatter many1Unbox]
 def many1Unbox.formatter (p : Formatter) : Formatter := do
@@ -460,7 +473,7 @@ def many1Unbox.formatter (p : Formatter) : Formatter := do
 @[combinator_formatter sepByNoAntiquot]
 def sepByNoAntiquot.formatter (p pSep : Formatter) : Formatter := do
   let stx ← getCur
-  visitArgs <| (List.range stx.getArgs.size).reverse.forM fun i => if i % 2 == 0 then p else pSep
+  visitArgs <| stx.getArgs.size.forRevM fun i => if i % 2 == 0 then p else pSep
 
 @[combinator_formatter sepBy1NoAntiquot] def sepBy1NoAntiquot.formatter := sepByNoAntiquot.formatter
 
@@ -524,7 +537,7 @@ register_builtin_option pp.oneline : Bool := {
 def format (formatter : Formatter) (stx : Syntax) : CoreM Format := do
   trace[PrettyPrinter.format.input] "{Std.format stx}"
   let options ← getOptions
-  let table ← Parser.builtinTokenTable.get
+  let table := Parser.getTokenTable (← getEnv)
   catchInternalId backtrackExceptionId
     (do
       let (_, st) ← (concat formatter { table, options }).run { stxTrav := .fromSyntax stx }

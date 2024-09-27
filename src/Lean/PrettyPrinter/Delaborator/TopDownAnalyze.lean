@@ -3,12 +3,15 @@ Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Daniel Selsam
 -/
+prelude
 import Lean.Data.RBMap
 import Lean.Meta.SynthInstance
+import Lean.Meta.CtorRecognizer
 import Lean.Util.FindMVar
 import Lean.Util.FindLevelMVar
 import Lean.Util.CollectLevelParams
 import Lean.Util.ReplaceLevel
+import Lean.PrettyPrinter.Delaborator.FieldNotation
 import Lean.PrettyPrinter.Delaborator.Options
 import Lean.PrettyPrinter.Delaborator.SubExpr
 import Lean.Elab.Config
@@ -121,6 +124,7 @@ def getPPAnalysisNamedArg        (o : Options) : Bool := o.get `pp.analysis.name
 def getPPAnalysisLetVarType      (o : Options) : Bool := o.get `pp.analysis.letVarType false
 def getPPAnalysisNeedsType       (o : Options) : Bool := o.get `pp.analysis.needsType false
 def getPPAnalysisBlockImplicit   (o : Options) : Bool := o.get `pp.analysis.blockImplicit false
+def getPPAnalysisNoDot           (o : Options) : Bool := o.get `pp.analysis.noDot false
 
 namespace PrettyPrinter.Delaborator
 
@@ -133,7 +137,7 @@ def isNonConstFun (motive : Expr) : MetaM Bool := do
   | _ => return motive.hasLooseBVars
 
 def isSimpleHOFun (motive : Expr) : MetaM Bool :=
-  return not (← returnsPi motive) && not (← isNonConstFun motive)
+  return !(← returnsPi motive) && !(← isNonConstFun motive)
 
 def isType2Type (motive : Expr) : MetaM Bool := do
   match ← inferType motive with
@@ -151,7 +155,7 @@ def isIdLike (arg : Expr) : Bool :=
   | _ => false
 
 def isStructureInstance (e : Expr) : MetaM Bool := do
-  match e.isConstructorApp? (← getEnv) with
+  match (← isConstructorApp? e) with
   | some s => return isStructure (← getEnv) s.induct
   | none   => return false
 
@@ -194,10 +198,10 @@ def isHBinOp (e : Expr) : Bool := Id.run do
 def replaceLPsWithVars (e : Expr) : MetaM Expr := do
   if !e.hasLevelParam then return e
   let lps := collectLevelParams {} e |>.params
-  let mut replaceMap : HashMap Name Level := {}
+  let mut replaceMap : Std.HashMap Name Level := {}
   for lp in lps do replaceMap := replaceMap.insert lp (← mkFreshLevelMVar)
   return e.replaceLevel fun
-    | Level.param n .. => replaceMap.find! n
+    | Level.param n .. => replaceMap[n]!
     | l => if !l.hasParam then some l else none
 
 def isDefEqAssigning (t s : Expr) : MetaM Bool := do
@@ -274,7 +278,7 @@ where
   inspectAux (fType mType : Expr) (i : Nat) (args mvars : Array Expr) := do
     let fType ← whnf fType
     let mType ← whnf mType
-    if not (i < args.size) then return ()
+    if !(i < args.size) then return ()
     match fType, mType with
     | Expr.forallE _ fd fb _, Expr.forallE _ _  mb _ => do
       -- TODO: do I need to check (← okBottomUp? args[i] mvars[i] fuel).isSafe here?
@@ -287,7 +291,7 @@ where
 partial def isTrivialBottomUp (e : Expr) : AnalyzeM Bool := do
   let opts ← getOptions
   return e.isFVar
-         || e.isConst || e.isMVar || e.isNatLit || e.isStringLit || e.isSort
+         || e.isConst || e.isMVar || e.isRawNatLit || e.isStringLit || e.isSort
          || (getPPAnalyzeTrustOfNat opts && e.isAppOfArity ``OfNat.ofNat 3)
          || (getPPAnalyzeTrustOfScientific opts && e.isAppOfArity ``OfScientific.ofScientific 5)
 
@@ -320,7 +324,7 @@ def withKnowing (knowsType knowsLevel : Bool) (x : AnalyzeM α) : AnalyzeM α :=
 builtin_initialize analyzeFailureId : InternalExceptionId ← registerInternalExceptionId `analyzeFailure
 
 def checkKnowsType : AnalyzeM Unit := do
-  if not (← read).knowsType then
+  if !(← read).knowsType then
     throw $ Exception.internal analyzeFailureId
 
 def annotateBoolAt (n : Name) (pos : Pos) : AnalyzeM Unit := do
@@ -399,6 +403,17 @@ mutual
       -- Unify with the expected type
       if (← read).knowsType then tryUnify (← inferType (mkAppN f args)) resultType
 
+      -- Prevent using dot notation if the expected of the argument can't be determined.
+      -- TODO: is canBottomUp sufficient for this?
+      if getPPFieldNotation (← getOptions) then
+        if let some (_, idx) ← fieldNotationCandidate? f args (getPPFieldNotationGeneralized (← getOptions)) then
+          if idx < args.size then
+            withKnowing false false do
+              if !(← canBottomUp args[idx]!) then
+                annotateBool `pp.analysis.noDot
+          else
+            annotateBool `pp.analysis.noDot
+
       let forceRegularApp : Bool :=
         (getPPAnalyzeTrustSubst (← getOptions) && isSubstLike (← getExpr))
         || (getPPAnalyzeTrustSubtypeMk (← getOptions) && (← getExpr).isAppOfArity ``Subtype.mk 4)
@@ -410,7 +425,7 @@ mutual
         funBinders   := mkArray args.size false
       }
 
-      if not rest.isEmpty then
+      if !rest.isEmpty then
         -- Note: this shouldn't happen for type-correct terms
         if !args.isEmpty then
           analyzeAppStaged (mkAppN f args) rest
@@ -486,11 +501,11 @@ mutual
     collectHigherOrders := do
       let { args, mvars, bInfos, ..} ← read
       for i in [:args.size] do
-        if not (bInfos[i]! == BinderInfo.implicit || bInfos[i]! == BinderInfo.strictImplicit) then continue
-        if not (← isHigherOrder (← inferType args[i]!)) then continue
+        if !(bInfos[i]! == BinderInfo.implicit || bInfos[i]! == BinderInfo.strictImplicit) then continue
+        if !(← isHigherOrder (← inferType args[i]!)) then continue
         if getPPAnalyzeTrustId (← getOptions) && isIdLike args[i]! then continue
 
-        if getPPAnalyzeTrustKnownFOType2TypeHOFuns (← getOptions) && not (← valUnknown mvars[i]!)
+        if getPPAnalyzeTrustKnownFOType2TypeHOFuns (← getOptions) && !(← valUnknown mvars[i]!)
           && (← isType2Type (args[i]!)) && (← isFOLike (args[i]!)) then continue
 
         tryUnify args[i]! mvars[i]!
@@ -587,7 +602,7 @@ mutual
               | _                 => annotateNamedArg (← mvarName mvars[i]!)
             else annotateBool `pp.analysis.skip; provided := false
             modify fun s => { s with provideds := s.provideds.set! i provided }
-          if (← get).provideds[i]! then withKnowing (not (← typeUnknown mvars[i]!)) true analyze
+          if (← get).provideds[i]! then withKnowing (!(← typeUnknown mvars[i]!)) true analyze
           tryUnify mvars[i]! args[i]!
 
     maybeSetExplicit := do

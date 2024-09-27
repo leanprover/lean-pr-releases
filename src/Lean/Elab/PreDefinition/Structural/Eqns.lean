@@ -3,6 +3,7 @@ Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Meta.Eqns
 import Lean.Meta.Tactic.Split
 import Lean.Meta.Tactic.Simp.Main
@@ -18,7 +19,9 @@ open Eqns
 namespace Structural
 
 structure EqnInfo extends EqnInfoCore where
-  recArgPos   : Nat
+  recArgPos : Nat
+  declNames : Array Name
+  numFixed  : Nat
   deriving Inhabited
 
 private partial def mkProof (declName : Name) (type : Expr) : MetaM Expr := do
@@ -36,13 +39,13 @@ where
       return ()
     else if (← tryContradiction mvarId) then
       return ()
+    else if let some mvarId ← whnfReducibleLHS? mvarId then
+      go mvarId
     else if let some mvarId ← simpMatch? mvarId then
       go mvarId
     else if let some mvarId ← simpIf? mvarId then
       go mvarId
-    else if let some mvarId ← whnfReducibleLHS? mvarId then
-      go mvarId
-    else match (← simpTargetStar mvarId {}).1 with
+    else match (← simpTargetStar mvarId {} (simprocs := {})).1 with
       | TacticResultCNM.closed => return ()
       | TacticResultCNM.modified mvarId => go mvarId
       | TacticResultCNM.noChange =>
@@ -57,17 +60,17 @@ where
 
 def mkEqns (info : EqnInfo) : MetaM (Array Name) :=
   withOptions (tactic.hygienic.set · false) do
-  let eqnTypes ← withNewMCtxDepth <| lambdaTelescope info.value fun xs body => do
+  let eqnTypes ← withNewMCtxDepth <| lambdaTelescope (cleanupAnnotations := true) info.value fun xs body => do
     let us := info.levelParams.map mkLevelParam
     let target ← mkEq (mkAppN (Lean.mkConst info.declName us) xs) body
     let goal ← mkFreshExprSyntheticOpaqueMVar target
-    mkEqnTypes #[info.declName] goal.mvarId!
-  let baseName := mkPrivateName (← getEnv) info.declName
+    mkEqnTypes info.declNames goal.mvarId!
+  let baseName := info.declName
   let mut thmNames := #[]
   for i in [: eqnTypes.size] do
     let type := eqnTypes[i]!
-    trace[Elab.definition.structural.eqns] "{eqnTypes[i]!}"
-    let name := baseName ++ (`_eq).appendIndexAfter (i+1)
+    trace[Elab.definition.structural.eqns] "eqnType {i}: {type}"
+    let name := (Name.str baseName eqnThmSuffixBase).appendIndexAfter (i+1)
     thmNames := thmNames.push name
     let value ← mkProof info.declName type
     let (type, value) ← removeUnusedEqnHypotheses type value
@@ -79,8 +82,11 @@ def mkEqns (info : EqnInfo) : MetaM (Array Name) :=
 
 builtin_initialize eqnInfoExt : MapDeclarationExtension EqnInfo ← mkMapDeclarationExtension
 
-def registerEqnsInfo (preDef : PreDefinition) (recArgPos : Nat) : CoreM Unit := do
-  modifyEnv fun env => eqnInfoExt.insert env preDef.declName { preDef with recArgPos }
+def registerEqnsInfo (preDef : PreDefinition) (declNames : Array Name) (recArgPos : Nat)
+    (numFixed : Nat) : CoreM Unit := do
+  ensureEqnReservedNamesAvailable preDef.declName
+  modifyEnv fun env => eqnInfoExt.insert env preDef.declName
+    { preDef with recArgPos, declNames, numFixed }
 
 def getEqnsFor? (declName : Name) : MetaM (Option (Array Name)) := do
   if let some info := eqnInfoExt.find? (← getEnv) declName then

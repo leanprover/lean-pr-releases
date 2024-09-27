@@ -3,6 +3,7 @@ Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Gabriel Ebner
 -/
+prelude
 import Lean.Elab.Command
 
 namespace Lean.Elab.Command
@@ -23,7 +24,7 @@ def elabAuxDef : CommandElab
     let id := `_aux ++ (← getMainModule) ++ `_ ++ id
     let id := String.intercalate "_" <| id.components.map (·.toString (escape := false))
     let ns ← getCurrNamespace
-    -- make sure we only add a single component so that scoped workes
+    -- make sure we only add a single component so that scoped works
     let id ← mkAuxName (ns.mkStr id) 1
     let id := id.replacePrefix ns Name.anonymous -- TODO: replace with def _root_.id
     elabCommand <|

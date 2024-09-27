@@ -3,6 +3,7 @@ Copyright (c) 2022 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Compiler.ImplementedByAttr
 import Lean.Compiler.LCNF.Renaming
 import Lean.Compiler.LCNF.ElimDead
@@ -172,7 +173,7 @@ Execute `x` with `fvarId` set as `mustInline`.
 After execution the original setting is restored.
 -/
 def withAddMustInline (fvarId : FVarId) (x : SimpM α) : SimpM α := do
-  let saved? := (← get).funDeclInfoMap.map.find? fvarId
+  let saved? := (← get).funDeclInfoMap.map[fvarId]?
   try
     addMustInline fvarId
     x
@@ -184,7 +185,7 @@ Return true if the given local function declaration or join point id is marked a
 `once` or `mustInline`. We use this information to decide whether to inline them.
 -/
 def isOnceOrMustInline (fvarId : FVarId) : SimpM Bool := do
-  match (← get).funDeclInfoMap.map.find? fvarId with
+  match (← get).funDeclInfoMap.map[fvarId]? with
     | some .once | some .mustInline  => return true
     | _ => return false
 

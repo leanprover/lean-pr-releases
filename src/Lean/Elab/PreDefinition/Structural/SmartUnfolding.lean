@@ -3,8 +3,10 @@ Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Elab.PreDefinition.Basic
 import Lean.Elab.PreDefinition.Structural.Basic
+import Lean.Meta.Match.MatcherApp.Basic
 
 namespace Lean.Elab.Structural
 open Meta
@@ -45,17 +47,13 @@ where
         else
           let mut altsNew := #[]
           for alt in matcherApp.alts, numParams in matcherApp.altNumParams do
-            let altNew ← lambdaTelescope alt fun xs altBody => do
-              unless xs.size >= numParams do
+            let altNew ← lambdaBoundedTelescope alt numParams fun xs altBody => do
+              unless xs.size = numParams do
                 throwError "unexpected matcher application alternative{indentExpr alt}\nat application{indentExpr e}"
               let altBody ← visit altBody
               let containsSUnfoldMatch := Option.isSome <| altBody.find? fun e => smartUnfoldingMatch? e |>.isSome
-              if !containsSUnfoldMatch then
-                let altBody ← mkLambdaFVars xs[numParams:xs.size] altBody
-                let altBody := markSmartUnfoldingMatchAlt altBody
-                mkLambdaFVars xs[0:numParams] altBody
-              else
-                mkLambdaFVars xs altBody
+              let altBody := if !containsSUnfoldMatch then markSmartUnfoldingMatchAlt altBody else altBody
+              mkLambdaFVars xs altBody
             altsNew := altsNew.push altNew
           return markSmartUnfoldingMatch { matcherApp with alts := altsNew }.toExpr
       | _ => processApp e

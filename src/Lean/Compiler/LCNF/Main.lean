@@ -3,7 +3,9 @@ Copyright (c) 2022 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Compiler.Options
+import Lean.Compiler.ExternAttr
 import Lean.Compiler.LCNF.PassManager
 import Lean.Compiler.LCNF.Passes
 import Lean.Compiler.LCNF.PrettyPrinter

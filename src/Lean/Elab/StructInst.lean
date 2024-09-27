@@ -3,11 +3,13 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Util.FindExpr
 import Lean.Parser.Term
 import Lean.Meta.Structure
 import Lean.Elab.App
 import Lean.Elab.Binders
+import Lean.PrettyPrinter
 
 namespace Lean.Elab.Term.StructInst
 
@@ -76,9 +78,27 @@ where
         go sources (sourcesNew.push source)
       else
         withFreshMacroScope do
-          let sourceNew ← `(src)
+          /-
+          Recall that local variables starting with `__` are treated as impl detail.
+          See `LocalContext.lean`.
+          Moreover, implementation detail let-vars are unfolded by `simp`
+          even when `zetaDelta := false`.
+          Motivation: the following failure when `zetaDelta := true`
+          ```
+          structure A where
+            a : Nat
+          structure B extends A where
+            b : Nat
+            w : a = b
+          def x : A where a := 37
+          @[simp] theorem x_a : x.a = 37 := rfl
+
+          def y : B := { x with b := 37, w := by simp }
+          ```
+          -/
+          let sourceNew ← `(__src)
           let r ← go sources (sourcesNew.push sourceNew)
-          `(let src := $source; $r)
+          `(let __src := $source; $r)
 
 structure ExplicitSourceInfo where
   stx        : Syntax
@@ -414,7 +434,7 @@ private def expandParentFields (s : Struct) : TermElabM Struct := do
     | { lhs := .fieldName ref fieldName :: _,    .. } =>
       addCompletionInfo <| CompletionInfo.fieldId ref fieldName (← getLCtx) s.structName
       match findField? env s.structName fieldName with
-      | none => throwErrorAt ref "'{fieldName}' is not a field of structure '{s.structName}'"
+      | none => throwErrorAt ref "'{fieldName}' is not a field of structure '{MessageData.ofConstName s.structName}'"
       | some baseStructName =>
         if baseStructName == s.structName then pure field
         else match getPathToBaseStructure? env baseStructName s.structName with
@@ -426,13 +446,13 @@ private def expandParentFields (s : Struct) : TermElabM Struct := do
           | _ => throwErrorAt ref "failed to access field '{fieldName}' in parent structure"
     | _ => return field
 
-private abbrev FieldMap := HashMap Name Fields
+private abbrev FieldMap := Std.HashMap Name Fields
 
 private def mkFieldMap (fields : Fields) : TermElabM FieldMap :=
   fields.foldlM (init := {}) fun fieldMap field =>
     match field.lhs with
     | .fieldName _ fieldName :: _    =>
-      match fieldMap.find? fieldName with
+      match fieldMap[fieldName]? with
       | some (prevField::restFields) =>
         if field.isSimple || prevField.isSimple then
           throwErrorAt field.ref "field '{fieldName}' has already been specified"
@@ -491,7 +511,10 @@ mutual
             let valStx := valStx.setArg 2 (mkNullNode <| mkSepArray args (mkAtom ","))
             let valStx ← updateSource valStx
             return { field with lhs := [field.lhs.head!], val := FieldVal.term valStx }
-
+  /--
+  Adds in the missing fields using the explicit sources.
+  Invariant: a missing field always comes from the first source that can provide it.
+  -/
   private partial def addMissingFields (s : Struct) : TermElabM Struct := do
     let env ← getEnv
     let fieldNames := getStructureFields env s.structName
@@ -505,13 +528,36 @@ mutual
             return { ref, lhs := [FieldLHS.fieldName ref fieldName], val := val } :: fields
           match Lean.isSubobjectField? env s.structName fieldName with
           | some substructName =>
-            -- If one of the sources has the subobject field, use it
-            if let some val ← s.source.explicit.findSomeM? fun source => mkProjStx? source.stx source.structName fieldName then
-              addField (FieldVal.term val)
-            else
+            -- Get all leaf fields of `substructName`
+            let downFields := getStructureFieldsFlattened env substructName false
+            -- Filter out all explicit sources that do not share a leaf field keeping
+            -- structure with no fields
+            let filtered := s.source.explicit.filter fun source =>
+              let sourceFields := getStructureFieldsFlattened env source.structName false
+              sourceFields.any (fun name => downFields.contains name) || sourceFields.isEmpty
+            -- Take the first such one remaining
+            match filtered[0]? with
+            | some src =>
+              -- If it is the correct type, use it
+              if src.structName == substructName then
+                addField (FieldVal.term src.stx)
+              -- If a projection of it is the correct type, use it
+              else if let some val ← mkProjStx? src.stx src.structName fieldName then
+                addField (FieldVal.term val)
+              -- No sources could provide this subobject in the proper order.
+              -- Recurse to handle default values for fields.
+              else
+                let substruct := Struct.mk ref substructName #[] [] s.source
+                let substruct ← expandStruct substruct
+                addField (FieldVal.nested substruct)
+            -- No sources could provide this subobject.
+            -- Recurse to handle default values for fields.
+            | none =>
               let substruct := Struct.mk ref substructName #[] [] s.source
               let substruct ← expandStruct substruct
               addField (FieldVal.nested substruct)
+          -- Since this is not a subobject field, we are free to use the first source that can
+            -- provide it.
           | none =>
             if let some val ← s.source.explicit.findSomeM? fun source => mkProjStx? source.stx source.structName fieldName then
               addField (FieldVal.term val)
@@ -632,6 +678,10 @@ private partial def elabStruct (s : Struct) (expectedType? : Option Expr) : Term
             | .error err       => throwError err
             | .ok tacticSyntax =>
               let stx ← `(by $tacticSyntax)
+              -- See comment in `Lean.Elab.Term.ElabAppArgs.processExplicitArg` about `tacticSyntax`.
+              -- We add info to get reliable positions for messages from evaluating the tactic script.
+              let info := field.ref.getHeadInfo
+              let stx := stx.raw.rewriteBottomUp (·.setInfo info)
               cont (← elabTermEnsuringType stx (d.getArg! 0).consumeTypeAnnotations) field
           | _ =>
             if bi == .instImplicit then
@@ -757,10 +807,8 @@ partial def mkDefaultValueAux? (struct : Struct) : Expr → TermElabM (Option Ex
         let arg ← mkFreshExprMVar d
         mkDefaultValueAux? struct (b.instantiate1 arg)
   | e =>
-    if e.isAppOfArity ``id 2 then
-      return some e.appArg!
-    else
-      return some e
+    let_expr id _ a := e | return some e
+    return some a
 
 def mkDefaultValue? (struct : Struct) (cinfo : ConstantInfo) : TermElabM (Option Expr) :=
   withRef struct.ref do
@@ -778,7 +826,9 @@ partial def reduce (structNames : Array Name) (e : Expr) : MetaM Expr := do
     | some r => reduce structNames r
     | none   => return e.updateProj! (← reduce structNames b)
   | .app f .. =>
-    match (← reduceProjOf? e structNames.contains) with
+    -- Recall that proposition fields are theorems. Thus, we must set transparency to .all
+    -- to ensure they are unfolded here
+    match (← withTransparency .all <| reduceProjOf? e structNames.contains) with
     | some r => reduce structNames r
     | none   =>
       let f := f.getAppFn
@@ -894,7 +944,7 @@ private def elabStructInstAux (stx : Syntax) (expectedType? : Option Expr) (sour
 
      TODO: investigate whether this design decision may have unintended side effects or produce confusing behavior.
   -/
-  let { val := r, struct, instMVars } ← withSynthesize (mayPostpone := true) <| elabStruct struct expectedType?
+  let { val := r, struct, instMVars } ← withSynthesize (postpone := .yes) <| elabStruct struct expectedType?
   trace[Elab.struct] "before propagate {r}"
   DefaultFields.propagate struct
   synthesizeAppInstMVars instMVars r
@@ -912,6 +962,8 @@ private def elabStructInstAux (stx : Syntax) (expectedType? : Option Expr) (sour
     else
       elabStructInstAux stx expectedType? sourceView
 
-builtin_initialize registerTraceClass `Elab.struct
+builtin_initialize
+  registerTraceClass `Elab.struct
+  registerTraceClass `Elab.struct.modifyOp
 
 end Lean.Elab.Term.StructInst

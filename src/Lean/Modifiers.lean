@@ -3,17 +3,16 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Environment
 
 namespace Lean
 
 builtin_initialize protectedExt : TagDeclarationExtension ← mkTagDeclarationExtension
 
-@[export lean_add_protected]
 def addProtected (env : Environment) (n : Name) : Environment :=
   protectedExt.tag env n
 
-@[export lean_is_protected]
 def isProtected (env : Environment) (n : Name) : Bool :=
   protectedExt.isTagged env n
 
@@ -46,7 +45,7 @@ def isPrivateNameExport (n : Name) : Bool :=
 Return `true` if `n` is of the form `_private.<module_name>.0`
 See comment above.
 -/
-private def isPrivatePrefix (n : Name) : Bool :=
+def isPrivatePrefix (n : Name) : Bool :=
   match n with
   | .num p 0 => go p
   | _ => false

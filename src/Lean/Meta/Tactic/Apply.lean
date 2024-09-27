@@ -1,42 +1,16 @@
 /-
 Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Leonardo de Moura
+Authors: Leonardo de Moura, Siddhartha Gadgil
 -/
+prelude
 import Lean.Util.FindMVar
 import Lean.Meta.SynthInstance
 import Lean.Meta.CollectMVars
 import Lean.Meta.Tactic.Util
+import Lean.PrettyPrinter
 
 namespace Lean.Meta
-/-- Controls which new mvars are turned in to goals by the `apply` tactic.
-- `nonDependentFirst`  mvars that don't depend on other goals appear first in the goal list.
-- `nonDependentOnly` only mvars that don't depend on other goals are added to goal list.
-- `all` all unassigned mvars are added to the goal list.
--/
-inductive ApplyNewGoals where
-  | nonDependentFirst | nonDependentOnly | all
-
-/-- Configures the behaviour of the `apply` tactic. -/
-structure ApplyConfig where
-  newGoals := ApplyNewGoals.nonDependentFirst
-  /--
-  If `synthAssignedInstances` is `true`, then `apply` will synthesize instance implicit arguments
-  even if they have assigned by `isDefEq`, and then check whether the synthesized value matches the
-  one inferred. The `congr` tactic sets this flag to false.
-  -/
-  synthAssignedInstances := true
-  /--
-  If `allowSynthFailures` is `true`, then `apply` will return instance implicit arguments
-  for which typeclass search failed as new goals.
-  -/
-  allowSynthFailures := false
-  /--
-  If `approx := true`, then we turn on `isDefEq` approximations. That is, we use
-  the `approxDefEq` combinator.
-  -/
-  approx : Bool := true
-
 /--
   Compute the number of expected arguments and whether the result type is of the form
   (?m ...) where ?m is an unassigned metavariable.
@@ -49,21 +23,79 @@ def getExpectedNumArgs (e : Expr) : MetaM Nat := do
   let (numArgs, _) ← getExpectedNumArgsAux e
   pure numArgs
 
-private def throwApplyError {α} (mvarId : MVarId) (eType : Expr) (targetType : Expr) : MetaM α :=
-  throwTacticEx `apply mvarId m!"failed to unify{indentExpr eType}\nwith{indentExpr targetType}"
+private def throwApplyError {α} (mvarId : MVarId) (eType : Expr) (targetType : Expr) : MetaM α := do
+  let explanation := MessageData.ofLazyM (es := #[eType, targetType]) do
+    let (eType, targetType) ← addPPExplicitToExposeDiff eType targetType
+    return m!"{indentExpr eType}\nwith{indentExpr targetType}"
+  throwTacticEx `apply mvarId m!"failed to unify{explanation}"
 
-def synthAppInstances (tacticName : Name) (mvarId : MVarId) (newMVars : Array Expr) (binderInfos : Array BinderInfo)
-    (synthAssignedInstances : Bool) (allowSynthFailures : Bool) : MetaM Unit :=
-  newMVars.size.forM fun i => do
-    if binderInfos[i]!.isInstImplicit then
-      let mvar := newMVars[i]!
+def synthAppInstances (tacticName : Name) (mvarId : MVarId) (mvarsNew : Array Expr) (binderInfos : Array BinderInfo)
+    (synthAssignedInstances : Bool) (allowSynthFailures : Bool) : MetaM Unit := do
+  let mut todo := #[]
+  -- Collect metavariables to synthesize
+  for mvar in mvarsNew, binderInfo in binderInfos do
+    if binderInfo.isInstImplicit then
       if synthAssignedInstances || !(← mvar.mvarId!.isAssigned) then
-        let mvarType ← inferType mvar
-        try
-          let mvarVal  ← synthInstance mvarType
-          unless (← isDefEq mvar mvarVal) do
+        todo := todo.push mvar
+  while !todo.isEmpty do
+    todo ← step todo
+where
+  /--
+  Try to synthesize instances for the metavariables `mvars`.
+  Returns metavariables that still need to be synthesized.
+  We can view the resulting array as the set of metavariables that we should try again.
+  This is needed when applying or rewriting with functions with complex instances.
+  For example, consider `rw [@map_smul]` where `map_smul` is
+  ```
+  map_smul {F : Type u_1} {M : Type u_2} {N : Type u_3} {φ : M → N}
+           {X : Type u_4} {Y : Type u_5}
+           [SMul M X] [SMul N Y] [FunLike F X Y] [MulActionSemiHomClass F φ X Y]
+           (f : F) (c : M) (x : X) : DFunLike.coe f (c • x) = φ c • DFunLike.coe f x
+  ```
+  and `MulActionSemiHomClass` is defined as
+  ```
+  class MulActionSemiHomClass (F : Type _)
+     {M N : outParam (Type _)} (φ : outParam (M → N))
+     (X Y : outParam (Type _)) [SMul M X] [SMul N Y] [FunLike F X Y] : Prop where
+  ```
+  The left-hand-side of the equation does not bind `N`. Thus, `SMul N Y` cannot
+  be synthesized until we synthesize `MulActionSemiHomClass F φ X Y`. Note that
+  `N` is an output parameter for `MulActionSemiHomClass`.
+  -/
+  step (mvars : Array Expr) : MetaM (Array Expr) := do
+    -- `ex?` stores the exception for this first synthesis failure in this step.
+    let mut ex? := none
+    -- `true` if we managed to synthesize an instance after we hit a failure.
+    -- That is, there is a chance we may succeed if we try again.
+    let mut progressAfterEx := false
+    -- Metavariables that we failed to synthesize.
+    let mut postponed := #[]
+    for mvar in mvars do
+      let mvarType ← inferType mvar
+      let mvarVal? ← try
+        let mvarVal ← synthInstance mvarType
+        unless postponed.isEmpty do
+          progressAfterEx := true
+        pure (some mvarVal)
+      catch ex =>
+        ex? := some ex
+        postponed := postponed.push mvar
+        pure none
+      if let some mvarVal := mvarVal? then
+        unless (← isDefEq mvar mvarVal) do
+          -- There is no point in trying again for this kind of failure
+          unless allowSynthFailures do
             throwTacticEx tacticName mvarId "failed to assign synthesized instance"
-        catch e => unless allowSynthFailures do throw e
+    if let some ex := ex? then
+      if progressAfterEx then
+        return postponed
+      else
+        -- There is no point in running `step` again. We should give up (`allowSynthFailures`),
+        -- or throw the first exception we found in this `step`.
+        if allowSynthFailures then return #[] else throw ex
+    else
+      -- Done. We successfully synthesized all metavariables.
+      return #[]
 
 def appendParentTag (mvarId : MVarId) (newMVars : Array Expr) (binderInfos : Array BinderInfo) : MetaM Unit := do
   let parentTag ← mvarId.getTag
@@ -171,6 +203,7 @@ def _root_.Lean.MVarId.apply (mvarId : MVarId) (e : Expr) (cfg : ApplyConfig := 
       else
         let (_, _, eType) ← forallMetaTelescopeReducing eType (some rangeNumArgs.start)
         throwApplyError mvarId eType targetType
+      termination_by rangeNumArgs.stop - i
     let (newMVars, binderInfos) ← go rangeNumArgs.start
     postprocessAppMVars `apply mvarId newMVars binderInfos cfg.synthAssignedInstances cfg.allowSynthFailures
     let e ← instantiateMVars e
@@ -182,11 +215,15 @@ def _root_.Lean.MVarId.apply (mvarId : MVarId) (e : Expr) (cfg : ApplyConfig := 
     let result := newMVarIds ++ otherMVarIds.toList
     result.forM (·.headBetaType)
     return result
-termination_by go i => rangeNumArgs.stop - i
 
-@[deprecated MVarId.apply]
-def apply (mvarId : MVarId) (e : Expr) (cfg : ApplyConfig := {}) : MetaM (List MVarId) :=
-  mvarId.apply e cfg
+/-- Short-hand for applying a constant to the goal. -/
+def _root_.Lean.MVarId.applyConst (mvar : MVarId) (c : Name) (cfg : ApplyConfig := {}) : MetaM (List MVarId) := do
+  mvar.apply (← mkConstWithFreshMVarLevels c) cfg
+
+end Meta
+
+open Meta
+namespace MVarId
 
 partial def splitAndCore (mvarId : MVarId) : MetaM (List MVarId) :=
   mvarId.withContext do
@@ -214,14 +251,14 @@ partial def splitAndCore (mvarId : MVarId) : MetaM (List MVarId) :=
 /--
 Apply `And.intro` as much as possible to goal `mvarId`.
 -/
-abbrev _root_.Lean.MVarId.splitAnd (mvarId : MVarId) : MetaM (List MVarId) :=
+abbrev splitAnd (mvarId : MVarId) : MetaM (List MVarId) :=
   splitAndCore mvarId
 
-@[deprecated MVarId.splitAnd]
-def splitAnd (mvarId : MVarId) : MetaM (List MVarId) :=
+@[deprecated splitAnd] -- 2024-03-17
+def _root_.Lean.Meta.splitAnd (mvarId : MVarId) : MetaM (List MVarId) :=
   mvarId.splitAnd
 
-def _root_.Lean.MVarId.exfalso (mvarId : MVarId) : MetaM MVarId :=
+def exfalso (mvarId : MVarId) : MetaM MVarId :=
   mvarId.withContext do
     mvarId.checkNotAssigned `exfalso
     let target ← instantiateMVars (← mvarId.getType)
@@ -230,4 +267,89 @@ def _root_.Lean.MVarId.exfalso (mvarId : MVarId) : MetaM MVarId :=
     mvarId.assign (mkApp2 (mkConst ``False.elim [u]) target mvarIdNew)
     return mvarIdNew.mvarId!
 
-end Lean.Meta
+/--
+Apply the `n`-th constructor of the target type,
+checking that it is an inductive type,
+and that there are the expected number of constructors.
+-/
+def nthConstructor
+    (name : Name) (idx : Nat) (expected? : Option Nat := none) (goal : MVarId) :
+    MetaM (List MVarId) := do
+  goal.withContext do
+    goal.checkNotAssigned name
+    matchConstInduct (← goal.getType').getAppFn
+      (fun _ => throwTacticEx name goal "target is not an inductive datatype")
+      fun ival us => do
+        if let some e := expected? then unless ival.ctors.length == e do
+          throwTacticEx name goal
+            s!"{name} tactic works for inductive types with exactly {e} constructors"
+        if h : idx < ival.ctors.length then
+          goal.apply <| mkConst ival.ctors[idx] us
+        else
+          throwTacticEx name goal s!"index {idx} out of bounds, only {ival.ctors.length} constructors"
+
+/--
+Try to convert an `Iff` into an `Eq` by applying `iff_of_eq`.
+If successful, returns the new goal, and otherwise returns the original `MVarId`.
+
+This may be regarded as being a special case of `Lean.MVarId.liftReflToEq`, specifically for `Iff`.
+-/
+def iffOfEq (mvarId : MVarId) : MetaM MVarId := do
+  let res ← observing? do
+    let [mvarId] ← mvarId.apply (mkConst ``iff_of_eq []) | failure
+    return mvarId
+  return res.getD mvarId
+
+/--
+Try to convert an `Eq` into an `Iff` by applying `propext`.
+If successful, then returns then new goal, otherwise returns the original `MVarId`.
+-/
+def propext (mvarId : MVarId) : MetaM MVarId := do
+  let res ← observing? do
+    -- Avoid applying `propext` if the target is not an equality of `Prop`s.
+    -- We don't want a unification specializing `Sort*` to `Prop`.
+    let tgt ← withReducible mvarId.getType'
+    let some (_, x, _) := tgt.eq? | failure
+    guard <| ← Meta.isProp x
+    let [mvarId] ← mvarId.apply (mkConst ``propext []) | failure
+    return mvarId
+  return res.getD mvarId
+
+/--
+Try to close the goal using `proof_irrel_heq`. Returns whether or not it succeeds.
+
+We need to be somewhat careful not to assign metavariables while doing this, otherwise we might
+specialize `Sort _` to `Prop`.
+-/
+def proofIrrelHeq (mvarId : MVarId) : MetaM Bool :=
+  mvarId.withContext do
+    let res ← observing? do
+      mvarId.checkNotAssigned `proofIrrelHeq
+      let tgt ← withReducible mvarId.getType'
+      let some (_, lhs, _, rhs) := tgt.heq? | failure
+      -- Note: `mkAppM` uses `withNewMCtxDepth`, which prevents `Sort _` from specializing to `Prop`
+      let pf ← mkAppM ``proof_irrel_heq #[lhs, rhs]
+      mvarId.assign pf
+      return true
+    return res.getD false
+
+/--
+Try to close the goal using `Subsingleton.elim`. Returns whether or not it succeeds.
+
+We are careful to apply `Subsingleton.elim` in a way that does not assign any metavariables.
+This is to prevent the `Subsingleton Prop` instance from being used as justification to specialize
+`Sort _` to `Prop`.
+-/
+def subsingletonElim (mvarId : MVarId) : MetaM Bool :=
+  mvarId.withContext do
+    let res ← observing? do
+      mvarId.checkNotAssigned `subsingletonElim
+      let tgt ← withReducible mvarId.getType'
+      let some (_, lhs, rhs) := tgt.eq? | failure
+      -- Note: `mkAppM` uses `withNewMCtxDepth`, which prevents `Sort _` from specializing to `Prop`
+      let pf ← mkAppM ``Subsingleton.elim #[lhs, rhs]
+      mvarId.assign pf
+      return true
+    return res.getD false
+
+end Lean.MVarId

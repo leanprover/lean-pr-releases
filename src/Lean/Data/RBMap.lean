@@ -3,6 +3,10 @@ Copyright (c) 2017 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
+import Init.Data.Ord
+import Init.Data.Nat.Linear
+
 namespace Lean
 universe u v w w'
 
@@ -75,6 +79,10 @@ protected def max : RBNode α β → Option (Sigma (fun k => β k))
 
 def singleton (k : α) (v : β k) : RBNode α β :=
   node red leaf k v leaf
+
+def isSingleton : RBNode α β → Bool
+  | node _ leaf _ _ leaf => true
+  | _ => false
 
 -- the first half of Okasaki's `balance`, concerning red-red sequences in the left child
 @[inline] def balance1 : RBNode α β → (a : α) → β a → RBNode α β → RBNode α β
@@ -159,7 +167,7 @@ def appendTrees :  RBNode α β → RBNode α β → RBNode α β
      | bc                   => balLeft a kx vx (node black bc ky vy d)
    | a, node red b kx vx c   => node red (appendTrees a b) kx vx c
    | node red a kx vx b,   c => node red a kx vx (appendTrees b c)
-termination_by _ x y => x.size + y.size
+termination_by x y => x.size + y.size
 
 section Erase
 
@@ -264,6 +272,9 @@ variable {α : Type u} {β : Type v} {σ : Type w} {cmp : α → α → Ordering
 
 def depth (f : Nat → Nat → Nat) (t : RBMap α β cmp) : Nat :=
   t.val.depth f
+
+def isSingleton (t : RBMap α β cmp) : Bool :=
+  t.val.isSingleton
 
 @[inline] def fold (f : σ → α → β → σ) : (init : σ) → RBMap α β cmp → σ
   | b, ⟨t, _⟩ => t.fold f b

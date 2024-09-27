@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Compiler.IR.UnboxResult
-// Imports: Init Lean.Data.Format Lean.Compiler.IR.Basic
+// Imports: Lean.Data.Format Lean.Compiler.IR.Basic
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -94,7 +94,7 @@ static lean_object* _init_l_Lean_getConstInfo___at_Lean_IR_UnboxResult_initFn___
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("unknown constant '", 18);
+x_1 = lean_mk_string_unchecked("unknown constant '", 18, 18);
 return x_1;
 }
 }
@@ -111,7 +111,7 @@ static lean_object* _init_l_Lean_getConstInfo___at_Lean_IR_UnboxResult_initFn___
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("'", 1);
+x_1 = lean_mk_string_unchecked("'", 1, 1);
 return x_1;
 }
 }
@@ -218,7 +218,7 @@ static lean_object* _init_l_Lean_IR_UnboxResult_initFn____x40_Lean_Compiler_IR_U
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("constant must be an inductive type", 34);
+x_1 = lean_mk_string_unchecked("constant must be an inductive type", 34, 34);
 return x_1;
 }
 }
@@ -235,7 +235,7 @@ static lean_object* _init_l_Lean_IR_UnboxResult_initFn____x40_Lean_Compiler_IR_U
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("recursive inductive datatypes are not supported", 47);
+x_1 = lean_mk_string_unchecked("recursive inductive datatypes are not supported", 47, 47);
 return x_1;
 }
 }
@@ -264,7 +264,7 @@ lean_object* x_7; uint8_t x_8;
 x_7 = lean_ctor_get(x_6, 0);
 lean_inc(x_7);
 lean_dec(x_6);
-x_8 = lean_ctor_get_uint8(x_7, sizeof(void*)*5);
+x_8 = lean_ctor_get_uint8(x_7, sizeof(void*)*6);
 lean_dec(x_7);
 if (x_8 == 0)
 {
@@ -343,7 +343,7 @@ static lean_object* _init_l_Lean_IR_UnboxResult_initFn____x40_Lean_Compiler_IR_U
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("unbox", 5);
+x_1 = lean_mk_string_unchecked("unbox", 5, 5);
 return x_1;
 }
 }
@@ -361,7 +361,7 @@ static lean_object* _init_l_Lean_IR_UnboxResult_initFn____x40_Lean_Compiler_IR_U
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Lean", 4);
+x_1 = lean_mk_string_unchecked("Lean", 4, 4);
 return x_1;
 }
 }
@@ -369,7 +369,7 @@ static lean_object* _init_l_Lean_IR_UnboxResult_initFn____x40_Lean_Compiler_IR_U
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("IR", 2);
+x_1 = lean_mk_string_unchecked("IR", 2, 2);
 return x_1;
 }
 }
@@ -377,7 +377,7 @@ static lean_object* _init_l_Lean_IR_UnboxResult_initFn____x40_Lean_Compiler_IR_U
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("UnboxResult", 11);
+x_1 = lean_mk_string_unchecked("UnboxResult", 11, 11);
 return x_1;
 }
 }
@@ -385,7 +385,7 @@ static lean_object* _init_l_Lean_IR_UnboxResult_initFn____x40_Lean_Compiler_IR_U
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("unboxAttr", 9);
+x_1 = lean_mk_string_unchecked("unboxAttr", 9, 9);
 return x_1;
 }
 }
@@ -405,7 +405,7 @@ static lean_object* _init_l_Lean_IR_UnboxResult_initFn____x40_Lean_Compiler_IR_U
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("compiler tries to unbox result values if their types are tagged with `[unbox]`", 78);
+x_1 = lean_mk_string_unchecked("compiler tries to unbox result values if their types are tagged with `[unbox]`", 78, 78);
 return x_1;
 }
 }
@@ -482,11 +482,11 @@ _start:
 {
 uint8_t x_3; lean_object* x_4; 
 x_3 = l_Lean_IR_UnboxResult_hasUnboxAttr(x_1, x_2);
+lean_dec(x_1);
 x_4 = lean_box(x_3);
 return x_4;
 }
 }
-lean_object* initialize_Init(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Data_Format(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Compiler_IR_Basic(uint8_t builtin, lean_object*);
 static bool _G_initialized = false;
@@ -494,9 +494,6 @@ LEAN_EXPORT lean_object* initialize_Lean_Compiler_IR_UnboxResult(uint8_t builtin
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init(builtin, lean_io_mk_world());
-if (lean_io_result_is_error(res)) return res;
-lean_dec_ref(res);
 res = initialize_Lean_Data_Format(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);

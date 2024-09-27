@@ -3,6 +3,7 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Meta.Transform
 import Lean.Meta.Inductive
 import Lean.Elab.Deriving.Basic
@@ -58,17 +59,21 @@ where
         let mut ctorArgs := #[]
         let mut rhs : Term := Syntax.mkStrLit (toString ctorInfo.name)
         rhs ← `(Format.text $rhs)
-        -- add `_` for inductive parameters, they are inaccessible
-        for _ in [:indVal.numParams] do
-          ctorArgs := ctorArgs.push (← `(_))
-        for i in [:ctorInfo.numFields] do
-          let x := xs[indVal.numParams + i]!
-          let a := mkIdent (← mkFreshUserName `a)
-          ctorArgs := ctorArgs.push a
-          let localDecl ← x.fvarId!.getDecl
-          if localDecl.binderInfo.isExplicit then
+        for i in [:xs.size] do
+          -- Note: some inductive parameters are explicit if they were promoted from indices,
+          -- so we process all constructor arguments in the same loop.
+          let x := xs[i]!
+          let a ← mkIdent <$> if i < indVal.numParams then pure header.argNames[i]! else mkFreshUserName `a
+          if i < indVal.numParams then
+            -- add `_` for inductive parameters, they are inaccessible
+            ctorArgs := ctorArgs.push (← `(_))
+          else
+            ctorArgs := ctorArgs.push a
+          if (← x.fvarId!.getBinderInfo).isExplicit then
             if (← inferType x).isAppOf indVal.name then
               rhs ← `($rhs ++ Format.line ++ $(mkIdent auxFunName):ident $a:ident max_prec)
+            else if (← isType x <||> isProof x) then
+              rhs ← `($rhs ++ Format.line ++ "_")
             else
               rhs ← `($rhs ++ Format.line ++ reprArg $a)
         patterns := patterns.push (← `(@$(mkIdent ctorName):ident $ctorArgs:term*))
@@ -104,18 +109,19 @@ def mkMutualBlock (ctx : Context) : TermElabM Syntax := do
      $auxDefs:command*
     end)
 
-private def mkReprInstanceCmds (declNames : Array Name) : TermElabM (Array Syntax) := do
-  let ctx ← mkContext "repr" declNames[0]!
-  let cmds := #[← mkMutualBlock ctx] ++ (← mkInstanceCmds ctx `Repr declNames)
+private def mkReprInstanceCmd (declName : Name) : TermElabM (Array Syntax) := do
+  let ctx ← mkContext "repr" declName
+  let cmds := #[← mkMutualBlock ctx] ++ (← mkInstanceCmds ctx `Repr #[declName])
   trace[Elab.Deriving.repr] "\n{cmds}"
   return cmds
 
 open Command
 
 def mkReprInstanceHandler (declNames : Array Name) : CommandElabM Bool := do
-  if (← declNames.allM isInductive) && declNames.size > 0 then
-    let cmds ← liftTermElabM <| mkReprInstanceCmds declNames
-    cmds.forM elabCommand
+  if (← declNames.allM isInductive) then
+    for declName in declNames do
+      let cmds ← liftTermElabM <| mkReprInstanceCmd declName
+      cmds.forM elabCommand
     return true
   else
     return false

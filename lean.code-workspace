@@ -13,6 +13,8 @@
 	"settings": {
 		"files.insertFinalNewline": true,
 		"files.trimTrailingWhitespace": true,
+		"cmake.buildDirectory": "${workspaceFolder}/build/release",
+		"cmake.generator": "Unix Makefiles",
 		"[markdown]": {
 			"rewrap.wrappingColumn": 70
 		},
@@ -45,6 +47,11 @@
 					"isDefault": true
 				}
 			}
+		]
+	},
+	"extensions": {
+		"recommendations": [
+			"leanprover.lean4"
 		]
 	}
 }

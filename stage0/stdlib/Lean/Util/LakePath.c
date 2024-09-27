@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Util.LakePath
-// Imports: Init
+// Imports: Init.System.IO
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -28,7 +28,7 @@ static lean_object* _init_l_Lean_determineLakePath___lambda__1___closed__1() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("LEAN_SYSROOT", 12);
+x_1 = lean_mk_string_unchecked("LEAN_SYSROOT", 12, 12);
 return x_1;
 }
 }
@@ -36,7 +36,7 @@ static lean_object* _init_l_Lean_determineLakePath___lambda__1___closed__2() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("lake", 4);
+x_1 = lean_mk_string_unchecked("lake", 4, 4);
 return x_1;
 }
 }
@@ -44,7 +44,7 @@ static lean_object* _init_l_Lean_determineLakePath___lambda__1___closed__3() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("bin", 3);
+x_1 = lean_mk_string_unchecked("bin", 3, 3);
 return x_1;
 }
 }
@@ -159,7 +159,7 @@ static lean_object* _init_l_Lean_determineLakePath___closed__1() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("LAKE", 4);
+x_1 = lean_mk_string_unchecked("LAKE", 4, 4);
 return x_1;
 }
 }
@@ -231,13 +231,13 @@ lean_dec(x_1);
 return x_3;
 }
 }
-lean_object* initialize_Init(uint8_t builtin, lean_object*);
+lean_object* initialize_Init_System_IO(uint8_t builtin, lean_object*);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_Lean_Util_LakePath(uint8_t builtin, lean_object* w) {
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init(builtin, lean_io_mk_world());
+res = initialize_Init_System_IO(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 l_Lean_determineLakePath___lambda__1___closed__1 = _init_l_Lean_determineLakePath___lambda__1___closed__1();

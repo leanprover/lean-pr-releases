@@ -3,6 +3,9 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Sebastian Ullrich, Leonardo de Moura
 -/
+prelude
+import Init.Data.Range
+import Init.Data.Hashable
 import Lean.Data.Name
 import Lean.Data.Format
 
@@ -27,6 +30,11 @@ def SourceInfo.updateTrailing (trailing : Substring) : SourceInfo → SourceInfo
   | SourceInfo.original leading pos _ endPos => SourceInfo.original leading pos trailing endPos
   | info                                     => info
 
+def SourceInfo.getRange? (canonicalOnly := false) (info : SourceInfo) : Option String.Range :=
+  return ⟨(← info.getPos? canonicalOnly), (← info.getTailPos? canonicalOnly)⟩
+
+deriving instance BEq for SourceInfo
+
 /-! # Syntax AST -/
 
 inductive IsNode : Syntax → Prop where
@@ -34,9 +42,9 @@ inductive IsNode : Syntax → Prop where
 
 def SyntaxNode : Type := {s : Syntax // IsNode s }
 
-def unreachIsNodeMissing {β} (h : IsNode Syntax.missing) : β := False.elim (nomatch h)
-def unreachIsNodeAtom {β} {info val} (h : IsNode (Syntax.atom info val)) : β := False.elim (nomatch h)
-def unreachIsNodeIdent {β info rawVal val preresolved} (h : IsNode (Syntax.ident info rawVal val preresolved)) : β := False.elim (nomatch h)
+def unreachIsNodeMissing {β} : IsNode Syntax.missing → β := nofun
+def unreachIsNodeAtom {β} {info val} : IsNode (Syntax.atom info val) → β := nofun
+def unreachIsNodeIdent {β info rawVal val preresolved} : IsNode (Syntax.ident info rawVal val preresolved) → β := nofun
 
 def isLitKind (k : SyntaxNodeKind) : Bool :=
   k == strLitKind || k == numLitKind || k == charLitKind || k == nameLitKind || k == scientificLitKind
@@ -77,6 +85,60 @@ end SyntaxNode
 
 namespace Syntax
 
+/--
+Compares syntax structures and position ranges, but not whitespace. We generally assume that if
+syntax trees equal in this way generate the same elaboration output, including positions contained
+in e.g. diagnostics and the info tree. However, as we have a few request handlers such as `goalsAt?`
+that are sensitive to whitespace information in the info tree, we currently use `eqWithInfo` instead
+for reuse checks.
+-/
+partial def structRangeEq : Syntax → Syntax → Bool
+  | .missing, .missing => true
+  | .node info k args, .node info' k' args' =>
+    info.getRange? == info'.getRange? && k == k' && args.isEqv args' structRangeEq
+  | .atom info val, .atom info' val' => info.getRange? == info'.getRange? && val == val'
+  | .ident info rawVal val preresolved, .ident info' rawVal' val' preresolved' =>
+    info.getRange? == info'.getRange? && rawVal == rawVal' && val == val' &&
+    preresolved == preresolved'
+  | _, _ => false
+
+/-- Like `structRangeEq` but prints trace on failure if `trace.Elab.reuse` is activated. -/
+def structRangeEqWithTraceReuse (opts : Options) (stx1 stx2 : Syntax) : Bool :=
+  if stx1.structRangeEq stx2 then
+    true
+  else
+    if opts.getBool `trace.Elab.reuse then
+      dbg_trace "reuse stopped:
+{stx1.formatStx (showInfo := true)} !=
+{stx2.formatStx (showInfo := true)}"
+      false
+    else
+      false
+
+
+/-- Full comparison of syntax structures and source infos.  -/
+partial def eqWithInfo : Syntax → Syntax → Bool
+  | .missing, .missing => true
+  | .node info k args, .node info' k' args' =>
+    info == info' && k == k' && args.isEqv args' eqWithInfo
+  | .atom info val, .atom info' val' => info == info' && val == val'
+  | .ident info rawVal val preresolved, .ident info' rawVal' val' preresolved' =>
+    info == info' && rawVal == rawVal' && val == val' && preresolved == preresolved'
+  | _, _ => false
+
+/-- Like `eqWithInfo` but prints trace on failure if `trace.Elab.reuse` is activated. -/
+def eqWithInfoAndTraceReuse (opts : Options) (stx1 stx2 : Syntax) : Bool :=
+  if stx1.eqWithInfo stx2 then
+    true
+  else
+    if opts.getBool `trace.Elab.reuse then
+      dbg_trace "reuse stopped:
+{stx1.formatStx (showInfo := true)} !=
+{stx2.formatStx (showInfo := true)}"
+      false
+    else
+      false
+
 def getAtomVal : Syntax → String
   | atom _ val => val
   | _          => ""
@@ -101,6 +163,16 @@ def asNode : Syntax → SyntaxNode
 
 def getIdAt (stx : Syntax) (i : Nat) : Name :=
   (stx.getArg i).getId
+
+/--
+Check for a `Syntax.ident` of the given name anywhere in the tree.
+This is usually a bad idea since it does not check for shadowing bindings,
+but in the delaborator we assume that bindings are never shadowed.
+-/
+partial def hasIdent (id : Name) : Syntax → Bool
+  | ident _ _ id' _ => id == id'
+  | node _ _ args   => args.any (hasIdent id)
+  | _               => false
 
 @[inline] def modifyArgs (stx : Syntax) (fn : Array Syntax → Array Syntax) : Syntax :=
   match stx with
@@ -183,13 +255,6 @@ partial def updateTrailing (trailing : Substring) : Syntax → Syntax
      let args := args.set! i last;
      Syntax.node info k args
   | s => s
-
-partial def getTailWithPos : Syntax → Option Syntax
-  | stx@(atom info _)   => info.getPos?.map fun _ => stx
-  | stx@(ident info ..) => info.getPos?.map fun _ => stx
-  | node SourceInfo.none _ args => args.findSomeRev? getTailWithPos
-  | stx@(node ..) => stx
-  | _ => none
 
 open SourceInfo in
 /-- Split an `ident` into its dot-separated components while preserving source info.
@@ -304,6 +369,10 @@ def getRange? (stx : Syntax) (canonicalOnly := false) : Option String.Range :=
   match stx.getPos? canonicalOnly, stx.getTailPos? canonicalOnly with
   | some start, some stop => some { start, stop }
   | _,          _         => none
+
+/-- Returns a synthetic Syntax which has the specified `String.Range`. -/
+def ofRange (range : String.Range) (canonical := true) : Lean.Syntax :=
+  .atom (.synthetic range.start range.stop canonical) ""
 
 /--
 Represents a cursor into a syntax tree that can be read, written, and advanced down/up/left/right.
@@ -530,4 +599,5 @@ def Stack.matches (stack : Syntax.Stack) (pattern : List $ Option SyntaxNodeKind
     |>.all id)
 
 end Syntax
+
 end Lean

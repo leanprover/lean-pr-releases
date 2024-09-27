@@ -3,6 +3,7 @@ Copyright (c) 2022 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.LocalContext
 import Lean.Compiler.LCNF.Basic
 
@@ -12,9 +13,9 @@ namespace Lean.Compiler.LCNF
 LCNF local context.
 -/
 structure LCtx where
-  params   : HashMap FVarId Param := {}
-  letDecls : HashMap FVarId LetDecl := {}
-  funDecls : HashMap FVarId FunDecl := {}
+  params   : Std.HashMap FVarId Param := {}
+  letDecls : Std.HashMap FVarId LetDecl := {}
+  funDecls : Std.HashMap FVarId FunDecl := {}
   deriving Inhabited
 
 def LCtx.addParam (lctx : LCtx) (param : Param) : LCtx :=

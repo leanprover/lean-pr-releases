@@ -3,6 +3,7 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Meta.Transform
 import Lean.Meta.Tactic.Replace
 
@@ -31,10 +32,6 @@ def _root_.Lean.MVarId.deltaTarget (mvarId : MVarId) (p : Name → Bool) : MetaM
     mvarId.checkNotAssigned `delta
     mvarId.change (← deltaExpand (← mvarId.getType) p) (checkDefEq := false)
 
-@[deprecated MVarId.deltaTarget]
-def deltaTarget (mvarId : MVarId) (p : Name → Bool) : MetaM MVarId :=
-  mvarId.deltaTarget p
-
 /--
 Delta expand declarations that satisfy `p` at `fvarId` type.
 -/
@@ -42,9 +39,5 @@ def _root_.Lean.MVarId.deltaLocalDecl (mvarId : MVarId) (fvarId : FVarId) (p : N
   mvarId.withContext do
     mvarId.checkNotAssigned `delta
     mvarId.changeLocalDecl fvarId (← deltaExpand (← mvarId.getType) p) (checkDefEq := false)
-
-@[deprecated MVarId.deltaLocalDecl]
-def deltaLocalDecl (mvarId : MVarId) (fvarId : FVarId) (p : Name → Bool) : MetaM MVarId :=
-  mvarId.deltaLocalDecl fvarId p
 
 end Lean.Meta

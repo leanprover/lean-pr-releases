@@ -3,14 +3,16 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Runtime
 import Lean.Compiler.IR.CompilerM
 import Lean.Compiler.IR.LiveVars
 
 namespace Lean.IR.ExplicitRC
-/-! Insert explicit RC instructions. So, it assumes the input code does not contain `inc` nor `dec` instructions.
-   This transformation is applied before lower level optimizations
-   that introduce the instructions `release` and `set`
+/-!
+Insert explicit RC instructions. So, it assumes the input code does not contain `inc` nor `dec` instructions.
+This transformation is applied before lower level optimizations
+that introduce the instructions `release` and `set`
 -/
 
 structure VarInfo where
@@ -89,7 +91,7 @@ private def isBorrowParamAux (x : VarId) (ys : Array Arg) (consumeParamPred : Na
     | Arg.var y      => x == y && !consumeParamPred i
 
 private def isBorrowParam (x : VarId) (ys : Array Arg) (ps : Array Param) : Bool :=
-  isBorrowParamAux x ys fun i => not ps[i]!.borrow
+  isBorrowParamAux x ys fun i => ! ps[i]!.borrow
 
 /--
 Return `n`, the number of times `x` is consumed.
@@ -122,7 +124,7 @@ private def addIncBeforeAux (ctx : Context) (xs : Array Arg) (consumeParamPred :
         addInc ctx x b numIncs
 
 private def addIncBefore (ctx : Context) (xs : Array Arg) (ps : Array Param) (b : FnBody) (liveVarsAfter : LiveVarSet) : FnBody :=
-  addIncBeforeAux ctx xs (fun i => not ps[i]!.borrow) b liveVarsAfter
+  addIncBeforeAux ctx xs (fun i => ! ps[i]!.borrow) b liveVarsAfter
 
 /-- See `addIncBeforeAux`/`addIncBefore` for the procedure that inserts `inc` operations before an application.  -/
 private def addDecAfterFullApp (ctx : Context) (xs : Array Arg) (ps : Array Param) (b : FnBody) (bLiveVars : LiveVarSet) : FnBody :=

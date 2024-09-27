@@ -3,6 +3,7 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Runtime
 import Lean.Compiler.NameMangling
 import Lean.Compiler.ExportAttr
@@ -243,7 +244,7 @@ def throwUnknownVar {α : Type} (x : VarId) : M α :=
 
 def getJPParams (j : JoinPointId) : M (Array Param) := do
   let ctx ← read;
-  match ctx.jpMap.find? j with
+  match ctx.jpMap[j]? with
   | some ps => pure ps
   | none    => throw "unknown join point"
 
@@ -493,7 +494,11 @@ def emitLit (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
   emitLhs z;
   match v with
   | LitVal.num v => emitNumLit t v; emitLn ";"
-  | LitVal.str v => emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
+  | LitVal.str v =>
+    emit "lean_mk_string_unchecked(";
+    emit (quoteString v); emit ", ";
+    emit v.utf8ByteSize; emit ", ";
+    emit v.length; emitLn ");"
 
 def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   match v with

@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Compiler.LCNF.OtherDecl
-// Imports: Init Lean.Compiler.LCNF.BaseTypes Lean.Compiler.LCNF.MonoTypes
+// Imports: Lean.Compiler.LCNF.BaseTypes Lean.Compiler.LCNF.MonoTypes
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -14,11 +14,9 @@
 extern "C" {
 #endif
 lean_object* l_instInhabitedReaderT___rarg___boxed(lean_object*, lean_object*);
-lean_object* l_ReaderT_instMonadReaderT___rarg(lean_object*);
 static lean_object* l_panic___at_Lean_Compiler_LCNF_getOtherDeclType___spec__1___closed__2;
 lean_object* l_Lean_Compiler_LCNF_getPhase(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 static lean_object* l_Lean_Compiler_LCNF_getOtherDeclType___closed__1;
-lean_object* l_instInhabited___rarg(lean_object*, lean_object*);
 extern lean_object* l_Lean_instInhabitedExpr;
 static lean_object* l_Lean_Compiler_LCNF_getOtherDeclType___closed__4;
 lean_object* l___private_Init_Util_0__mkPanicMessageWithDecl(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
@@ -31,13 +29,15 @@ static lean_object* l_Lean_Compiler_LCNF_getOtherDeclType___closed__2;
 lean_object* l_Lean_Compiler_LCNF_getOtherDeclMonoType(lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_Compiler_LCNF_getOtherDeclType(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 extern lean_object* l_Lean_Core_instMonadCoreM;
+lean_object* l_instInhabitedOfMonad___rarg(lean_object*, lean_object*);
 static lean_object* l_panic___at_Lean_Compiler_LCNF_getOtherDeclType___spec__1___closed__1;
+lean_object* l_ReaderT_instMonad___rarg(lean_object*);
 static lean_object* _init_l_panic___at_Lean_Compiler_LCNF_getOtherDeclType___spec__1___closed__1() {
 _start:
 {
 lean_object* x_1; lean_object* x_2; 
 x_1 = l_Lean_Core_instMonadCoreM;
-x_2 = l_ReaderT_instMonadReaderT___rarg(x_1);
+x_2 = l_ReaderT_instMonad___rarg(x_1);
 return x_2;
 }
 }
@@ -47,7 +47,7 @@ _start:
 lean_object* x_1; lean_object* x_2; lean_object* x_3; 
 x_1 = l_panic___at_Lean_Compiler_LCNF_getOtherDeclType___spec__1___closed__1;
 x_2 = l_Lean_instInhabitedExpr;
-x_3 = l_instInhabited___rarg(x_1, x_2);
+x_3 = l_instInhabitedOfMonad___rarg(x_1, x_2);
 return x_3;
 }
 }
@@ -75,7 +75,7 @@ static lean_object* _init_l_Lean_Compiler_LCNF_getOtherDeclType___closed__1() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Lean.Compiler.LCNF.OtherDecl", 28);
+x_1 = lean_mk_string_unchecked("Lean.Compiler.LCNF.OtherDecl", 28, 28);
 return x_1;
 }
 }
@@ -83,7 +83,7 @@ static lean_object* _init_l_Lean_Compiler_LCNF_getOtherDeclType___closed__2() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Lean.Compiler.LCNF.getOtherDeclType", 35);
+x_1 = lean_mk_string_unchecked("Lean.Compiler.LCNF.getOtherDeclType", 35, 35);
 return x_1;
 }
 }
@@ -91,7 +91,7 @@ static lean_object* _init_l_Lean_Compiler_LCNF_getOtherDeclType___closed__3() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("unreachable code has been reached", 33);
+x_1 = lean_mk_string_unchecked("unreachable code has been reached", 33, 33);
 return x_1;
 }
 }
@@ -101,7 +101,7 @@ _start:
 lean_object* x_1; lean_object* x_2; lean_object* x_3; lean_object* x_4; lean_object* x_5; lean_object* x_6; 
 x_1 = l_Lean_Compiler_LCNF_getOtherDeclType___closed__1;
 x_2 = l_Lean_Compiler_LCNF_getOtherDeclType___closed__2;
-x_3 = lean_unsigned_to_nat(18u);
+x_3 = lean_unsigned_to_nat(19u);
 x_4 = lean_unsigned_to_nat(9u);
 x_5 = l_Lean_Compiler_LCNF_getOtherDeclType___closed__3;
 x_6 = l___private_Init_Util_0__mkPanicMessageWithDecl(x_1, x_2, x_3, x_4, x_5);
@@ -156,7 +156,6 @@ return x_17;
 }
 }
 }
-lean_object* initialize_Init(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Compiler_LCNF_BaseTypes(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Compiler_LCNF_MonoTypes(uint8_t builtin, lean_object*);
 static bool _G_initialized = false;
@@ -164,9 +163,6 @@ LEAN_EXPORT lean_object* initialize_Lean_Compiler_LCNF_OtherDecl(uint8_t builtin
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init(builtin, lean_io_mk_world());
-if (lean_io_result_is_error(res)) return res;
-lean_dec_ref(res);
 res = initialize_Lean_Compiler_LCNF_BaseTypes(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);

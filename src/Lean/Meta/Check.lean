@@ -3,6 +3,7 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Meta.InferType
 
 /-!
@@ -81,7 +82,7 @@ where
         return (a, b)
       else if a.getAppNumArgs != b.getAppNumArgs then
         return (a, b)
-      else if not (← isDefEq a.getAppFn b.getAppFn) then
+      else if !(← isDefEq a.getAppFn b.getAppFn) then
         return (a, b)
       else
         let fType ← inferType a.getAppFn

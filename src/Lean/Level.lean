@@ -3,6 +3,8 @@ Copyright (c) 2018 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
+import Init.Data.Array.QSort
 import Lean.Data.HashMap
 import Lean.Data.HashSet
 import Lean.Data.PersistentHashMap
@@ -256,8 +258,7 @@ def ctorToNat : Level → Nat
   | max ..   => 4
   | imax ..  => 5
 
-/- TODO: use well founded recursion. -/
-partial def normLtAux : Level → Nat → Level → Nat → Bool
+def normLtAux : Level → Nat → Level → Nat → Bool
   | succ l₁, k₁, l₂, k₂ => normLtAux l₁ (k₁+1) l₂ k₂
   | l₁, k₁, succ l₂, k₂ => normLtAux l₁ k₁ l₂ (k₂+1)
   | l₁@(max l₁₁ l₁₂), k₁, l₂@(max l₂₁ l₂₂), k₂ =>
@@ -426,15 +427,18 @@ def Result.imax : Result → Result → Result
   | f, Result.imaxNode Fs => Result.imaxNode (f::Fs)
   | f₁, f₂                => Result.imaxNode [f₁, f₂]
 
-def toResult : Level → Result
+def toResult (l : Level) (mvars : Bool) : Result :=
+  match l with
   | zero       => Result.num 0
-  | succ l     => Result.succ (toResult l)
-  | max l₁ l₂  => Result.max (toResult l₁) (toResult l₂)
-  | imax l₁ l₂ => Result.imax (toResult l₁) (toResult l₂)
+  | succ l     => Result.succ (toResult l mvars)
+  | max l₁ l₂  => Result.max (toResult l₁ mvars) (toResult l₂ mvars)
+  | imax l₁ l₂ => Result.imax (toResult l₁ mvars) (toResult l₂ mvars)
   | param n    => Result.leaf n
   | mvar n     =>
-    let n := n.name.replacePrefix `_uniq (Name.mkSimple "?u");
-    Result.leaf n
+    if mvars then
+      Result.leaf <| n.name.replacePrefix `_uniq (Name.mkSimple "?u")
+    else
+      Result.leaf `_
 
 private def parenIfFalse : Format → Bool → Format
   | f, true  => f
@@ -469,17 +473,17 @@ protected partial def Result.quote (r : Result) (prec : Nat) : Syntax.Level :=
 
 end PP
 
-protected def format (u : Level) : Format :=
-  (PP.toResult u).format true
+protected def format (u : Level) (mvars : Bool) : Format :=
+  (PP.toResult u mvars).format true
 
 instance : ToFormat Level where
-  format u := Level.format u
+  format u := Level.format u (mvars := true)
 
 instance : ToString Level where
-  toString u := Format.pretty (Level.format u)
+  toString u := Format.pretty (format u)
 
-protected def quote (u : Level) (prec : Nat := 0) : Syntax.Level :=
-  (PP.toResult u).quote prec
+protected def quote (u : Level) (prec : Nat := 0) (mvars : Bool := true) : Syntax.Level :=
+  (PP.toResult u (mvars := mvars)).quote prec
 
 instance : Quote Level `level where
   quote := Level.quote
@@ -606,13 +610,13 @@ where
       let v' := v.getLevelOffset
       (u.getLevelOffset == v' || v'.isZero)
       && u.getOffset ≥ v.getOffset
-termination_by _ u v => (u, v)
+  termination_by (u, v)
 
 end Level
 
-abbrev LevelMap (α : Type)  := HashMap Level α
+abbrev LevelMap (α : Type)  := Std.HashMap Level α
 abbrev PersistentLevelMap (α : Type) := PHashMap Level α
-abbrev LevelSet := HashSet Level
+abbrev LevelSet := Std.HashSet Level
 abbrev PersistentLevelSet := PHashSet Level
 abbrev PLevelSet := PersistentLevelSet
 

@@ -5,6 +5,7 @@ Authors: Sebastian Ullrich
 
 Elaboration of syntax quotations as terms and patterns (in `match_syntax`). See also `./Hygiene.lean` for the basic
 hygiene workings and data types. -/
+prelude
 import Lean.Syntax
 import Lean.ResolveName
 import Lean.Elab.Term
@@ -222,9 +223,12 @@ def getQuotKind (stx : Syntax) : TermElabM SyntaxNodeKind := do
   | ``Parser.Tactic.quot => addNamedQuotInfo stx `tactic
   | ``Parser.Tactic.quotSeq => addNamedQuotInfo stx `tactic.seq
   | .str kind "quot" => addNamedQuotInfo stx kind
-  | ``dynamicQuot => match ← elabParserName stx[1] with
+  | ``dynamicQuot =>
+    let id := stx[1]
+    match (← elabParserName id) with
     | .parser n _ => return n
     | .category c => return c
+    | .alias _    => return (← Parser.getSyntaxKindOfParserAlias? id.getId.eraseMacroScopes).get!
   | k => throwError "unexpected quotation kind {k}"
 
 def mkSyntaxQuotation (stx : Syntax) (kind : Name) : TermElabM Syntax := do
@@ -592,7 +596,7 @@ private partial def compileStxMatch (discrs : List Term) (alts : List Alt) : Ter
     `(have __discr := $discr; $stx)
   | _, _ => unreachable!
 
-abbrev IdxSet := HashSet Nat
+abbrev IdxSet := Std.HashSet Nat
 
 private partial def hasNoErrorIfUnused : Syntax → Bool
   | `(no_error_if_unused% $_) => true
@@ -601,7 +605,7 @@ private partial def hasNoErrorIfUnused : Syntax → Bool
 
 /--
 Given `rhss` the right-hand-sides of a `match`-syntax notation,
-We tag them with with fresh identifiers `alt_idx`. We use them to detect whether an alternative
+We tag them with fresh identifiers `alt_idx`. We use them to detect whether an alternative
 has been used or not.
 The result is a triple `(altIdxMap, ignoreIfUnused, rhssNew)` where
 - `altIdxMap` is a mapping from the `alt_idx` identifiers to right-hand-side indices.
@@ -686,5 +690,6 @@ builtin_initialize
   registerTraceClass `Elab.match_syntax
   registerTraceClass `Elab.match_syntax.alt (inherited := true)
   registerTraceClass `Elab.match_syntax.result (inherited := true)
+  registerTraceClass `Elab.match_syntax.onMatch
 
 end Lean.Elab.Term.Quotation

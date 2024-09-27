@@ -26,6 +26,8 @@ opaque floatSpec : FloatSpec := {
   decLe := fun _ _ => inferInstanceAs (Decidable True)
 }
 
+/-- Native floating point type, corresponding to the IEEE 754 *binary64* format
+(`double` in C or `f64` in Rust). -/
 structure Float where
   val : floatSpec.float
 
@@ -99,12 +101,12 @@ Returns an undefined value if `x` is not finite.
 instance : ToString Float where
   toString := Float.toString
 
+@[extern "lean_uint64_to_float"] opaque UInt64.toFloat (n : UInt64) : Float
+
 instance : Repr Float where
-  reprPrec n _ := Float.toString n
+  reprPrec n prec := if n < UInt64.toFloat 0 then Repr.addAppParen (toString n) prec else toString n
 
 instance : ReprAtom Float  := ⟨⟩
-
-@[extern "lean_uint64_to_float"] opaque UInt64.toFloat (n : UInt64) : Float
 
 @[extern "sin"] opaque Float.sin : Float → Float
 @[extern "cos"] opaque Float.cos : Float → Float

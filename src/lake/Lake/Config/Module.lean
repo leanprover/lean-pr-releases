@@ -23,8 +23,8 @@ structure Module where
 instance : Hashable Module where hash m := hash m.keyName
 instance : BEq Module where beq m n := m.keyName == n.keyName
 
-abbrev ModuleSet := HashSet Module
-@[inline] def ModuleSet.empty : ModuleSet := HashSet.empty
+abbrev ModuleSet := Std.HashSet Module
+@[inline] def ModuleSet.empty : ModuleSet := Std.HashSet.empty
 
 abbrev OrdModuleSet := OrdHashSet Module
 @[inline] def OrdModuleSet.empty : OrdModuleSet := OrdHashSet.empty
@@ -89,11 +89,17 @@ abbrev pkg (self : Module) : Package :=
 @[inline] def cFile (self : Module) : FilePath :=
   self.irPath "c"
 
+@[inline] def coExportFile (self : Module) : FilePath :=
+  self.irPath "c.o.export"
+
+@[inline] def coNoExportFile (self : Module) : FilePath :=
+  self.irPath "c.o.noexport"
+
 @[inline] def bcFile (self : Module) : FilePath :=
   self.irPath "bc"
 
-@[inline] def coFile (self : Module) : FilePath :=
-  self.irPath "c.o"
+def bcFile? (self : Module) : Option FilePath :=
+  if Lean.Internal.hasLLVMBackend () then some self.bcFile else none
 
 @[inline] def bcoFile (self : Module) : FilePath :=
   self.irPath "bc.o"
@@ -135,11 +141,14 @@ def dynlibSuffix := "-1"
 @[inline] def weakLinkArgs (self : Module) : Array String :=
   self.lib.weakLinkArgs
 
+@[inline] def platformIndependent (self : Module) : Option Bool :=
+  self.lib.platformIndependent
+
 @[inline] def shouldPrecompile (self : Module) : Bool :=
   self.lib.precompileModules
 
-@[inline] def nativeFacets (self : Module) : Array (ModuleFacet (BuildJob FilePath)) :=
-  self.lib.nativeFacets
+@[inline] def nativeFacets (self : Module) (shouldExport : Bool) : Array (ModuleFacet (BuildJob FilePath)) :=
+  self.lib.nativeFacets shouldExport
 
 /-! ## Trace Helpers -/
 

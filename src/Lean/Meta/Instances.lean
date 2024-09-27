@@ -3,6 +3,7 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.ScopedEnvExtension
 import Lean.Meta.GlobalInstances
 import Lean.Meta.DiscrTree
@@ -76,8 +77,8 @@ def tcDtConfig : WhnfCoreConfig := {}
 
 def addInstanceEntry (d : Instances) (e : InstanceEntry) : Instances :=
   match e.globalName? with
-  | some n => { d with discrTree := d.discrTree.insertCore e.keys e tcDtConfig, instanceNames := d.instanceNames.insert n e, erased := d.erased.erase n }
-  | none   => { d with discrTree := d.discrTree.insertCore e.keys e tcDtConfig }
+  | some n => { d with discrTree := d.discrTree.insertCore e.keys e, instanceNames := d.instanceNames.insert n e, erased := d.erased.erase n }
+  | none   => { d with discrTree := d.discrTree.insertCore e.keys e }
 
 def Instances.eraseCore (d : Instances) (declName : Name) : Instances :=
   { d with erased := d.erased.insert declName, instanceNames := d.instanceNames.erase declName }
@@ -100,7 +101,7 @@ private def mkInstanceKey (e : Expr) : MetaM (Array InstanceKey) := do
     DiscrTree.mkPath type tcDtConfig
 
 /--
-Compute the order the arguments of `inst` should by synthesized.
+Compute the order the arguments of `inst` should be synthesized.
 
 The synthesization order makes sure that all mvars in non-out-params of the
 subgoals are assigned before we try to synthesize it.  Otherwise it goes left
@@ -112,8 +113,34 @@ For example:
     (because A B are out-params and are only filled in once we synthesize 2)
 
 (The type of `inst` must not contain mvars.)
+
+Remark: `projInfo?` is `some` if the instance is a projection.
+We need this information because of the heuristic we use to annotate binder
+information in projections. See PR #5376 and issue #5333. Before PR
+#5376, given a class `C` at
+```
+class A (n : Nat) where
+
+instance [A n] : A n.succ where
+
+class B [A 20050] where
+
+class C [A 20000] extends B where
+```
+we would get the following instance
+```
+C.toB [inst : A 20000] [self : @C inst] : @B ...
+```
+After the PR, we have
+```
+C.toB {inst : A 20000} [self : @C inst] : @B ...
+```
+Note the attribute `inst` is now just a regular implicit argument.
+To ensure `computeSynthOrder` works as expected, we should take
+this change into account while processing field `self`.
+This field is the one at position `projInfo?.numParams`.
 -/
-partial def computeSynthOrder (inst : Expr) : MetaM (Array Nat) :=
+private partial def computeSynthOrder (inst : Expr) (projInfo? : Option ProjectionFunctionInfo) : MetaM (Array Nat) :=
   withReducible do
   let instTy ← inferType inst
 
@@ -150,7 +177,8 @@ partial def computeSynthOrder (inst : Expr) : MetaM (Array Nat) :=
   let tyOutParams ← getSemiOutParamPositionsOf ty
   let tyArgs := ty.getAppArgs
   for tyArg in tyArgs, i in [:tyArgs.size] do
-    unless tyOutParams.contains i do assignMVarsIn tyArg
+    unless tyOutParams.contains i do
+      assignMVarsIn tyArg
 
   -- Now we successively try to find the next ready subgoal, where all
   -- non-out-params are mvar-free.
@@ -158,7 +186,13 @@ partial def computeSynthOrder (inst : Expr) : MetaM (Array Nat) :=
   let mut toSynth := List.range argMVars.size |>.filter (argBIs[·]! == .instImplicit) |>.toArray
   while !toSynth.isEmpty do
     let next? ← toSynth.findM? fun i => do
-      forallTelescopeReducing (← instantiateMVars (← inferType argMVars[i]!)) fun _ argTy => do
+      let argTy ← instantiateMVars (← inferType argMVars[i]!)
+      if let some projInfo := projInfo? then
+        if projInfo.numParams == i then
+          -- See comment regarding `projInfo?` at the beginning of this function
+          assignMVarsIn argTy
+          return true
+      forallTelescopeReducing argTy fun _ argTy => do
       let argTy ← whnf argTy
       let argOutParams ← getSemiOutParamPositionsOf argTy
       let argTyArgs := argTy.getAppArgs
@@ -194,7 +228,8 @@ def addInstance (declName : Name) (attrKind : AttributeKind) (prio : Nat) : Meta
   let c ← mkConstWithLevelParams declName
   let keys ← mkInstanceKey c
   addGlobalInstance declName attrKind
-  let synthOrder ← computeSynthOrder c
+  let projInfo? ← getProjectionFnInfo? declName
+  let synthOrder ← computeSynthOrder c projInfo?
   instanceExtension.add { keys, val := c, priority := prio, globalName? := declName, attrKind, synthOrder } attrKind
 
 builtin_initialize
@@ -216,8 +251,11 @@ def getGlobalInstancesIndex : CoreM (DiscrTree InstanceEntry) :=
 def getErasedInstances : CoreM (PHashSet Name) :=
   return Meta.instanceExtension.getState (← getEnv) |>.erased
 
+def isInstanceCore (env : Environment) (declName : Name) : Bool :=
+  Meta.instanceExtension.getState env |>.instanceNames.contains declName
+
 def isInstance (declName : Name) : CoreM Bool :=
-  return Meta.instanceExtension.getState (← getEnv) |>.instanceNames.contains declName
+  return isInstanceCore (← getEnv) declName
 
 def getInstancePriority? (declName : Name) : CoreM (Option Nat) := do
   let some entry := Meta.instanceExtension.getState (← getEnv) |>.instanceNames.find? declName | return none

@@ -3,6 +3,7 @@ Copyright (c) 2022 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Compiler.LCNF.Basic
 import Lean.Compiler.LCNF.Types
 
@@ -61,7 +62,7 @@ structure State where
   Whenever there is function application `f a₁ ... aₙ`, where `f` is in `decls`, `f` is not `main`, and
   we visit with the abstract values assigned to `aᵢ`, but first we record the visit here.
   -/
-  visited : HashSet (Name × Array AbsValue) := {}
+  visited : Std.HashSet (Name × Array AbsValue) := {}
   /--
   Bitmask containing the result, i.e., which parameters of `main` are fixed.
   We initialize it with `true` everywhere.

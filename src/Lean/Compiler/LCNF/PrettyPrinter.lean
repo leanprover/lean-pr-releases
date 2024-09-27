@@ -3,7 +3,8 @@ Copyright (c) 2022 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
-import Lean.PrettyPrinter
+prelude
+import Lean.PrettyPrinter.Delaborator.Options
 import Lean.Compiler.LCNF.CompilerM
 import Lean.Compiler.LCNF.Internalize
 

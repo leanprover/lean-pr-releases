@@ -8,27 +8,31 @@ paths containing package roots: an import `A.B.C` resolves to
 `path/A/B/C.olean` for the first entry `path` in `LEAN_PATH`
 with a directory `A/`. `import A` resolves to `path/A.olean`.
 -/
-import Lean.Data.Name
+prelude
+import Init.System.IO
 
 namespace Lean
 open System
 
+/--
+Executes `f` with the corresponding module name for each `.lean` file contained in `dir`.
+
+For example, if `dir` contains `A/B/C.lean`, `f` is called with `A.B.C`.
+-/
 partial def forEachModuleInDir [Monad m] [MonadLiftT IO m]
-    (dir : FilePath) (f : Lean.Name → m PUnit) (ext := "lean") : m PUnit := do
+    (dir : FilePath) (f : Lean.Name → m PUnit) : m PUnit := do
   for entry in (← dir.readDir) do
     if (← liftM (m := IO) <| entry.path.isDir) then
       let n := Lean.Name.mkSimple entry.fileName
-      let r := FilePath.withExtension entry.fileName ext
-      if (← liftM (m := IO) r.pathExists) then f n
       forEachModuleInDir entry.path (f <| n ++ ·)
-    else if entry.path.extension == some ext then
+    else if entry.path.extension == some "lean" then
       f <| Lean.Name.mkSimple <| FilePath.withExtension entry.fileName "" |>.toString
 
 def realPathNormalized (p : FilePath) : IO FilePath :=
   return (← IO.FS.realPath p).normalize
 
 def modToFilePath (base : FilePath) (mod : Name) (ext : String) : FilePath :=
-  go mod |>.withExtension ext
+  go mod |>.addExtension ext
 where
   go : Name → FilePath
   | Name.str p h => go p / h
@@ -46,7 +50,7 @@ not check whether the returned path exists. -/
 def findWithExt (sp : SearchPath) (ext : String) (mod : Name) : IO (Option FilePath) := do
   let pkg := mod.getRoot.toString (escape := false)
   let root? ← sp.findM? fun p =>
-    (p / pkg).isDir <||> ((p / pkg).withExtension ext).pathExists
+    (p / pkg).isDir <||> ((p / pkg).addExtension ext).pathExists
   return root?.map (modToFilePath · mod ext)
 
 /-- Like `findWithExt`, but ensures the returned path exists. -/
@@ -106,16 +110,10 @@ partial def findOLean (mod : Name) : IO FilePath := do
     return fname
   else
     let pkg := FilePath.mk <| mod.getRoot.toString (escape := false)
-    let mut msg := s!"unknown package '{pkg}'"
-    let rec maybeThisOne dir := do
-      if ← (dir / pkg).isDir then
-        return some s!"\nYou might need to open '{dir}' as a workspace in your editor"
-      if let some dir := dir.parent then
-        maybeThisOne dir
-      else
-       return none
-    if let some msg' ← maybeThisOne (← IO.currentDir) then
-      msg := msg ++ msg'
+    let mut msg := s!"unknown module prefix '{pkg}'
+
+No directory '{pkg}' or file '{pkg}.olean' in the search path entries:
+{"\n".intercalate <| sp.map (·.toString)}"
     throw <| IO.userError msg
 
 /-- Infer module name of source file name. -/

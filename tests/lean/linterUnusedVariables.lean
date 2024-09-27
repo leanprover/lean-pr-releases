@@ -23,17 +23,21 @@ def usedAndUnusedVariables : Nat :=
     3
   x
 
-def unusedWhereVariable : Nat :=
+def letRecVariable : Nat :=
+  let rec x := 5
+  3
+
+def whereVariable : Nat :=
   3
 where
-  x := 5
+  x := 5 -- x is globally available via `whereVariable.x`
 
 def unusedWhereArgument : Nat :=
   f 2
 where
   f (x : Nat) := 3
 
-def unusedWhereFunction : Nat :=
+def whereFunction : Nat :=
   2
 where
   f (x : Nat) := 3
@@ -210,8 +214,14 @@ opaque externConst (x : Nat) : Nat :=
 macro "useArg " name:declId arg:ident : command => `(def $name ($arg : α) : α := $arg)
 useArg usedMacroVariable a
 
-macro "doNotUseArg " name:declId arg:ident : command => `(def $name ($arg : α) : Nat := 3)
+macro (name := doNotUse) "doNotUseArg " name:declId arg:ident : command =>
+  `(def $name ($arg : α) : Nat := 3)
 doNotUseArg unusedMacroVariable b
+
+@[unused_variables_ignore_fn]
+def ignoreDoNotUse : Lean.Linter.IgnoreFunction := fun _ stack _ => stack.matches [``doNotUse]
+
+doNotUseArg unusedMacroVariable2 b
 
 macro "ignoreArg " id:declId sig:declSig : command => `(opaque $id $sig)
 ignoreArg ignoredMacroVariable (x : UInt32) : UInt32
@@ -236,8 +246,24 @@ def Nat.discriminate (n : Nat) (H1 : n = 0 → α) (H2 : ∀ m, n = succ m → �
   | 0 => H1 rfl
   | succ m => H2 m rfl
 
-@[unused_variables_ignore_fn]
-def ignoreEverything : Lean.Linter.IgnoreFunction :=
-  fun _ _ _ => true
+example [ord : Ord β] (f : α → β) (x y : α) : Ordering := compare (f x) (f y)
+example {α β} [ord : Ord β] (f : α → β) (x y : α) : Ordering := compare (f x) (f y)
+example {h : Decidable True} (t e : α) : ite True t e = t := if_pos trivial
 
-def ignored (x : Nat) := 0
+inductive A where
+  | intro : Nat → A
+
+def A.out : A → Nat
+  | .intro n => n
+
+/-! `h` is used indirectly via an alias introduced by `match` that is used only via the mvar ctx -/
+theorem problematicAlias (n : A) (i : Nat) (h : i ≤ n.out) : i ≤ n.out :=
+  match n with
+  | .intro _ => by assumption
+
+/-!
+The wildcard pattern introduces a copy of `x` that should not be linted as it is in an
+inaccessible annotation.
+-/
+example : (x = y) → y = x
+  | .refl _ => .refl _

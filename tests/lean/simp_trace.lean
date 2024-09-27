@@ -24,8 +24,6 @@ theorem ex3 : fact x > 0 := by
   | zero => decide
   | succ x ih =>
     simp [fact]
-    apply Nat.mul_pos
-    apply Nat.zero_lt_succ
     apply ih
 
 def head [Inhabited α] : List α → α
@@ -85,6 +83,9 @@ example : (a ∧ (b ∧ b)) = (a ∧ b) := by simp only [my_thm]
 example : x - 1 + 1 = x := by simp (discharger := sorry) [Nat.sub_add_cancel]
 
 -- The following examples test simplification at hypotheses.
+section
+-- These lemmas were subsequently added to the simp set and confuse the test.
+attribute [-simp] Nat.add_left_eq_self Nat.add_right_eq_self
 
 -- Two simp lemmas applied to one hypothesis.
 example (h' : bla x = x) : x + x = x := by
@@ -116,6 +117,8 @@ example (h' : bla x = x) : bla x = x := by
   simp [bla, h] at *
   exact h'
 
+end
+
 -- This example tests tracing of class projections.
 
 class HasProp (A) where
@@ -138,3 +141,15 @@ example (P : Prop) : P ∧ P ↔ P := by simp only [← my_thm']
 example {P : Prop} : P → P := by intro h; simp [*]
 
 example {P : Prop} : P → P := by intro; simp [*]
+
+-- `simp_all only [h]`, where `h` is a local hypothesis, is redundant and
+-- misleading since `simp_all` uses all local hypotheses anyway. `simp_all?`
+-- should therefore omit hypotheses from the suggested theorem list.
+
+example {P : Nat → Type} (h₁ : n = m) (h₂ : P m) : P n := by
+  simp_all
+  exact h₂
+
+example {Q : ∀ {n m : Nat}, n = m → Prop} {P : Nat → Type} (h₁ : n = m) (h₂ : P m) (h₃ : Q h₁) : P n := by
+  simp_all
+  exact h₂

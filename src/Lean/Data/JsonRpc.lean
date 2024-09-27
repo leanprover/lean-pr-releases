@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 Authors: Marc Huisinga, Wojciech Nawrocki
 -/
-import Init.Control
+prelude
 import Init.System.IO
 import Lean.Data.RBTree
 import Lean.Data.Json
@@ -183,6 +183,9 @@ structure ResponseError (α : Type u) where
 instance [ToJson α] : CoeOut (ResponseError α) Message :=
   ⟨fun r => Message.responseError r.id r.code r.message (r.data?.map toJson)⟩
 
+instance : CoeOut (ResponseError Unit) Message :=
+  ⟨fun r => Message.responseError r.id r.code r.message none⟩
+
 instance : Coe String RequestID := ⟨RequestID.str⟩
 instance : Coe JsonNumber RequestID := ⟨RequestID.num⟩
 
@@ -263,7 +266,7 @@ instance [FromJson α] : FromJson (Notification α) where
       let params := params?
       let param : α ← fromJson? (toJson params)
       pure $ ⟨method, param⟩
-    else throw "not a notfication"
+    else throw "not a notification"
 
 end Lean.JsonRpc
 

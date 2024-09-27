@@ -3,6 +3,11 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
+import Init.Data.Array.Basic
+import Init.NotationExtra
+import Init.Data.ToString.Macro
+
 universe u v w
 
 namespace Lean
@@ -312,8 +317,8 @@ variable {m : Type → Type w} [Monad m]
   anyMAux p t.root <||> t.tail.anyM p
 
 @[inline] def allM (a : PersistentArray α) (p : α → m Bool) : m Bool := do
-  let b ← anyM a (fun v => do let b ← p v; pure (not b))
-  pure (not b)
+  let b ← anyM a (fun v => do let b ← p v; pure (!b))
+  pure (!b)
 
 end
 

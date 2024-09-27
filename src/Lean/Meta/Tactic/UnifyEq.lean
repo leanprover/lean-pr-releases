@@ -3,6 +3,7 @@ Copyright (c) 2022 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Meta.Tactic.Injection
 
 namespace Lean.Meta
@@ -19,6 +20,11 @@ structure UnifyEqResult where
   mvarId    : MVarId
   subst     : FVarSubst
   numNewEqs : Nat := 0
+
+private def toOffset? (e : Expr) : MetaM (Option (Expr × Nat)) := do
+  match (← evalNat e) with
+  | some k => return some (mkNatLit 0, k)
+  | none => isOffset? e
 
 /--
   Helper method for methods such as `Cases.unifyEqs?`.
@@ -68,9 +74,31 @@ def unifyEq? (mvarId : MVarId) (eqFVarId : FVarId) (subst : FVarSubst := {})
             return none -- this alternative has been solved
           else
             throwError "dependent elimination failed, failed to solve equation{indentExpr eqDecl.type}"
+        /- Special support for offset equalities -/
+        let injectionOffset? (a b : Expr) := do
+          unless (← getEnv).contains ``Nat.elimOffset do return none
+          let some (xa, ka) ← toOffset? a | return none
+          let some (xb, kb) ← toOffset? b | return none
+          if ka == 0 || kb == 0 then return none -- use default noConfusion
+          let (x, y, k) ← if ka < kb then
+            pure (xa, (← mkAdd xb (mkNatLit (kb - ka))), ka)
+          else if ka = kb then
+            pure (xa, xb, ka)
+          else
+            pure ((← mkAdd xa (mkNatLit (ka - kb))), xb, kb)
+          let target ← mvarId.getType
+          let u ← getLevel target
+          let newTarget ← mkArrow (← mkEq x y) target
+          let tag ← mvarId.getTag
+          let newMVar ← mkFreshExprSyntheticOpaqueMVar newTarget tag
+          let val := mkAppN (mkConst ``Nat.elimOffset [u]) #[target, x, y, mkNatLit k, eqDecl.toExpr, newMVar]
+          mvarId.assign val
+          let mvarId ← newMVar.mvarId!.tryClear eqDecl.fvarId
+          return some mvarId
         let rec injection (a b : Expr) := do
-          let env ← getEnv
-          if a.isConstructorApp env && b.isConstructorApp env then
+          if let some mvarId ← injectionOffset? a b then
+            return some { mvarId, numNewEqs := 1, subst }
+          if (← isConstructorApp a <&&> isConstructorApp b) then
             /- ctor_i ... = ctor_j ... -/
             match (← injectionCore mvarId eqFVarId) with
             | InjectionResultCore.solved                   => return none -- this alternative has been solved

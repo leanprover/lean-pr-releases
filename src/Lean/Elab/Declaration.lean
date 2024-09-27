@@ -3,6 +3,7 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura, Sebastian Ullrich
 -/
+prelude
 import Lean.Util.CollectLevelParams
 import Lean.Elab.DeclUtil
 import Lean.Elab.DefView
@@ -41,7 +42,7 @@ private def isNamedDef (stx : Syntax) : Bool :=
     let decl := stx[1]
     let k := decl.getKind
     k == ``Lean.Parser.Command.abbrev ||
-    k == ``Lean.Parser.Command.def ||
+    k == ``Lean.Parser.Command.definition ||
     k == ``Lean.Parser.Command.theorem ||
     k == ``Lean.Parser.Command.opaque ||
     k == ``Lean.Parser.Command.axiom ||
@@ -94,7 +95,7 @@ private def expandDeclNamespace? (stx : Syntax) : MacroM (Option (Name × Syntax
   let scpView := extractMacroScopes name
   match scpView.name with
   | .str .anonymous _ => return none
-  | .str pre shortName => return some (pre, setDefName stx { scpView with name := shortName }.review)
+  | .str pre shortName => return some (pre, setDefName stx { scpView with name := .mkSimple shortName }.review)
   | _ => return none
 
 def elabAxiom (modifiers : Modifiers) (stx : Syntax) : CommandElabM Unit := do
@@ -165,7 +166,7 @@ private def inductiveSyntaxToView (modifiers : Modifiers) (decl : Syntax) : Comm
     return { ref := ctor, modifiers := ctorModifiers, declName := ctorName, binders := binders, type? := type? : CtorView }
   let computedFields ← (decl[5].getOptional?.map (·[1].getArgs) |>.getD #[]).mapM fun cf => withRef cf do
     return { ref := cf, modifiers := cf[0], fieldId := cf[1].getId, type := ⟨cf[3]⟩, matchAlts := ⟨cf[4]⟩ }
-  let classes ← getOptDerivingClasses decl[6]
+  let classes ← liftCoreM <| getOptDerivingClasses decl[6]
   return {
     ref             := decl
     shortDeclName   := name
@@ -183,29 +184,32 @@ def elabInductive (modifiers : Modifiers) (stx : Syntax) : CommandElabM Unit := 
   elabInductiveViews #[v]
 
 def elabClassInductive (modifiers : Modifiers) (stx : Syntax) : CommandElabM Unit := do
-  let modifiers := modifiers.addAttribute { name := `class }
+  let modifiers := modifiers.addAttr { name := `class }
   let v ← classInductiveSyntaxToView modifiers stx
   elabInductiveViews #[v]
 
-def getTerminationHints (stx : Syntax) : TerminationHints :=
-  let decl := stx[1]
-  let k := decl.getKind
-  if k == ``Parser.Command.def || k == ``Parser.Command.abbrev || k == ``Parser.Command.theorem || k == ``Parser.Command.instance then
-    let args := decl.getArgs
-    { terminationBy? := args[args.size - 2]!.getOptional?, decreasingBy? := args[args.size - 1]!.getOptional? }
-  else
-    {}
-
-@[builtin_command_elab declaration]
-def elabDeclaration : CommandElab := fun stx => do
-  match (← liftMacroM <| expandDeclNamespace? stx) with
+/--
+Macro that expands a declaration with a complex name into an explicit `namespace` block.
+Implementing this step as a macro means that reuse checking is handled by `elabCommand`.
+ -/
+@[builtin_macro Lean.Parser.Command.declaration]
+def expandNamespacedDeclaration : Macro := fun stx => do
+  match (← expandDeclNamespace? stx) with
   | some (ns, newStx) => do
-    let ns := mkIdentFrom stx ns
-    let newStx ← `(namespace $ns $(⟨newStx⟩) end $ns)
-    withMacroExpansion stx newStx <| elabCommand newStx
-  | none => do
-    let decl     := stx[1]
-    let declKind := decl.getKind
+    -- Limit ref variability for incrementality; see Note [Incremental Macros]
+    let declTk := stx[1][0]
+    let ns := mkIdentFrom declTk ns
+    withRef declTk `(namespace $ns $(⟨newStx⟩) end $ns)
+  | none => Macro.throwUnsupported
+
+@[builtin_command_elab declaration, builtin_incremental]
+def elabDeclaration : CommandElab := fun stx => do
+  let decl     := stx[1]
+  let declKind := decl.getKind
+  if isDefLike decl then
+    -- only case implementing incrementality currently
+    elabMutualDef #[stx]
+  else withoutCommandIncrementality true do
     if declKind == ``Lean.Parser.Command.«axiom» then
       let modifiers ← elabModifiers stx[0]
       elabAxiom modifiers decl
@@ -218,8 +222,6 @@ def elabDeclaration : CommandElab := fun stx => do
     else if declKind == ``Lean.Parser.Command.«structure» then
       let modifiers ← elabModifiers stx[0]
       elabStructure modifiers decl
-    else if isDefLike decl then
-      elabMutualDef #[stx] (getTerminationHints stx)
     else
       throwError "unexpected declaration"
 
@@ -312,6 +314,10 @@ def expandMutualElement : Macro := fun stx => do
   let mut elemsNew := #[]
   let mut modified := false
   for elem in stx[1].getArgs do
+    -- Don't trigger the `expandNamespacedDecl` macro, the namespace is handled by the mutual def
+    -- elaborator directly instead
+    if elem.isOfKind ``Parser.Command.declaration then
+      continue
     match (← expandMacro? elem) with
     | some elemNew => elemsNew := elemsNew.push elemNew; modified := true
     | none         => elemsNew := elemsNew.push elem
@@ -330,25 +336,16 @@ def expandMutualPreamble : Macro := fun stx =>
     let endCmd    ← `(end)
     return mkNullNode (#[secCmd] ++ preamble ++ #[newMutual] ++ #[endCmd])
 
-@[builtin_command_elab «mutual»]
+@[builtin_command_elab «mutual», builtin_incremental]
 def elabMutual : CommandElab := fun stx => do
-  let hints := { terminationBy? := stx[3].getOptional?, decreasingBy? := stx[4].getOptional? }
-  if isMutualInductive stx then
-    if let some bad := hints.terminationBy? then
-      throwErrorAt bad "invalid 'termination_by' in mutually inductive datatype declaration"
-    if let some bad := hints.decreasingBy? then
-      throwErrorAt bad "invalid 'decreasing_by' in mutually inductive datatype declaration"
-    elabMutualInductive stx[1].getArgs
-  else if isMutualDef stx then
-    for arg in stx[1].getArgs do
-      let argHints := getTerminationHints arg
-      if let some bad := argHints.terminationBy? then
-        throwErrorAt bad "invalid 'termination_by' in 'mutual' block, it must be used after the 'end' keyword"
-      if let some bad := argHints.decreasingBy? then
-        throwErrorAt bad "invalid 'decreasing_by' in 'mutual' block, it must be used after the 'end' keyword"
-    elabMutualDef stx[1].getArgs hints
-  else
-    throwError "invalid mutual block"
+  if isMutualDef stx then
+    -- only case implementing incrementality currently
+    elabMutualDef stx[1].getArgs
+  else withoutCommandIncrementality true do
+    if isMutualInductive stx then
+      elabMutualInductive stx[1].getArgs
+    else
+      throwError "invalid mutual block: either all elements of the block must be inductive declarations, or they must all be definitions/theorems/abbrevs"
 
 /- leading_parser "attribute " >> "[" >> sepBy1 (eraseAttr <|> Term.attrInstance) ", " >> "]" >> many1 ident -/
 @[builtin_command_elab «attribute»] def elabAttr : CommandElab := fun stx => do
@@ -366,7 +363,21 @@ def elabMutual : CommandElab := fun stx => do
   let attrs ← elabAttrs attrInsts
   let idents := stx[4].getArgs
   for ident in idents do withRef ident <| liftTermElabM do
-    let declName ← resolveGlobalConstNoOverloadWithInfo ident
+    /-
+    HACK to allow `attribute` command to disable builtin simprocs.
+    TODO: find a better solution. Example: have some "fake" declaration
+    for builtin simprocs.
+    -/
+    let declNames ←
+      try
+        realizeGlobalConstWithInfos ident
+      catch _ =>
+        let name := ident.getId.eraseMacroScopes
+        if (← Simp.isBuiltinSimproc name) then
+          pure [name]
+        else
+          throwUnknownConstant name
+    let declName ← ensureNonAmbiguous ident declNames
     Term.applyAttributes declName attrs
     for attrName in toErase do
       Attribute.erase declName attrName

@@ -3,6 +3,7 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura, Sebastian Ullrich
 -/
+prelude
 import Lean.Structure
 import Lean.Elab.Attributes
 
@@ -26,6 +27,8 @@ def checkNotAlreadyDeclared {m} [Monad m] [MonadEnv m] [MonadError m] [MonadInfo
     match privateToUserName? declName with
     | none          => throwError "'{declName}' has already been declared"
     | some declName => throwError "private declaration '{declName}' has already been declared"
+  if isReservedName env declName then
+    throwError "'{declName}' is a reserved name"
   if env.contains (mkPrivateName env declName) then
     addInfo (mkPrivateName env declName)
     throwError "a private declaration '{declName}' has already been declared"
@@ -78,9 +81,13 @@ def Modifiers.isNonrec : Modifiers → Bool
   | { recKind := .nonrec, .. } => true
   | _                          => false
 
-/-- Store `attr` in `modifiers` -/
-def Modifiers.addAttribute (modifiers : Modifiers) (attr : Attribute) : Modifiers :=
+/-- Adds attribute `attr` in `modifiers` -/
+def Modifiers.addAttr (modifiers : Modifiers) (attr : Attribute) : Modifiers :=
   { modifiers with attrs := modifiers.attrs.push attr }
+
+/-- Filters attributes using `p` -/
+def Modifiers.filterAttrs (modifiers : Modifiers) (p : Attribute → Bool) : Modifiers :=
+  { modifiers with attrs := modifiers.attrs.filter p }
 
 instance : ToFormat Modifiers := ⟨fun m =>
   let components : List Format :=
@@ -113,7 +120,7 @@ section Methods
 
 variable [Monad m] [MonadEnv m] [MonadResolveName m] [MonadError m] [MonadMacroAdapter m] [MonadRecDepth m] [MonadTrace m] [MonadOptions m] [AddMessageContext m] [MonadLog m] [MonadInfoTree m] [MonadLiftT IO m]
 
-/-- Elaborate declaration modifiers (i.e., attributes, `partial`, `private`, `proctected`, `unsafe`, `noncomputable`, doc string)-/
+/-- Elaborate declaration modifiers (i.e., attributes, `partial`, `private`, `protected`, `unsafe`, `noncomputable`, doc string)-/
 def elabModifiers (stx : Syntax) : m Modifiers := do
   let docCommentStx := stx[0]
   let attrsStx      := stx[1]

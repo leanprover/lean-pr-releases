@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Util
-// Imports: Init Lean.Util.CollectFVars Lean.Util.CollectLevelParams Lean.Util.CollectMVars Lean.Util.FindMVar Lean.Util.FindLevelMVar Lean.Util.MonadCache Lean.Util.PPExt Lean.Util.Path Lean.Util.Profile Lean.Util.RecDepth Lean.Util.ShareCommon Lean.Util.Sorry Lean.Util.Trace Lean.Util.FindExpr Lean.Util.ReplaceExpr Lean.Util.ForEachExpr Lean.Util.ForEachExprWhere Lean.Util.ReplaceLevel Lean.Util.FoldConsts Lean.Util.SCC Lean.Util.OccursCheck Lean.Util.HasConstCache Lean.Util.FileSetupInfo
+// Imports: Lean.Util.CollectFVars Lean.Util.CollectLevelParams Lean.Util.CollectMVars Lean.Util.FindMVar Lean.Util.FindLevelMVar Lean.Util.MonadCache Lean.Util.PPExt Lean.Util.Path Lean.Util.Profile Lean.Util.RecDepth Lean.Util.ShareCommon Lean.Util.Sorry Lean.Util.Trace Lean.Util.FindExpr Lean.Util.ReplaceExpr Lean.Util.ForEachExpr Lean.Util.ForEachExprWhere Lean.Util.ReplaceLevel Lean.Util.FoldConsts Lean.Util.SCC Lean.Util.TestExtern Lean.Util.OccursCheck Lean.Util.HasConstCache Lean.Util.FileSetupInfo Lean.Util.Heartbeats Lean.Util.SearchPath Lean.Util.SafeExponentiation Lean.Util.NumObjs Lean.Util.NumApps
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -13,7 +13,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-lean_object* initialize_Init(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_CollectFVars(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_CollectLevelParams(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_CollectMVars(uint8_t builtin, lean_object*);
@@ -34,17 +33,20 @@ lean_object* initialize_Lean_Util_ForEachExprWhere(uint8_t builtin, lean_object*
 lean_object* initialize_Lean_Util_ReplaceLevel(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_FoldConsts(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_SCC(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Util_TestExtern(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_OccursCheck(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_HasConstCache(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_FileSetupInfo(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Util_Heartbeats(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Util_SearchPath(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Util_SafeExponentiation(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Util_NumObjs(uint8_t builtin, lean_object*);
+lean_object* initialize_Lean_Util_NumApps(uint8_t builtin, lean_object*);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_Lean_Util(uint8_t builtin, lean_object* w) {
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init(builtin, lean_io_mk_world());
-if (lean_io_result_is_error(res)) return res;
-lean_dec_ref(res);
 res = initialize_Lean_Util_CollectFVars(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
@@ -105,6 +107,9 @@ lean_dec_ref(res);
 res = initialize_Lean_Util_SCC(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
+res = initialize_Lean_Util_TestExtern(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
 res = initialize_Lean_Util_OccursCheck(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
@@ -112,6 +117,21 @@ res = initialize_Lean_Util_HasConstCache(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = initialize_Lean_Util_FileSetupInfo(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Util_Heartbeats(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Util_SearchPath(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Util_SafeExponentiation(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Util_NumObjs(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Util_NumApps(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 return lean_io_result_mk_ok(lean_box(0));

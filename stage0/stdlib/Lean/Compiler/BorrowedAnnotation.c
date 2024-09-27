@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Compiler.BorrowedAnnotation
-// Imports: Init Lean.Expr
+// Imports: Lean.Expr
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -25,7 +25,7 @@ static lean_object* _init_l_Lean_markBorrowed___closed__1() {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("borrowed", 8);
+x_1 = lean_mk_string_unchecked("borrowed", 8, 8);
 return x_1;
 }
 }
@@ -79,16 +79,12 @@ x_3 = lean_box(x_2);
 return x_3;
 }
 }
-lean_object* initialize_Init(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Expr(uint8_t builtin, lean_object*);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_Lean_Compiler_BorrowedAnnotation(uint8_t builtin, lean_object* w) {
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init(builtin, lean_io_mk_world());
-if (lean_io_result_is_error(res)) return res;
-lean_dec_ref(res);
 res = initialize_Lean_Expr(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);

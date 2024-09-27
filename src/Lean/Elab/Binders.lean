@@ -3,9 +3,12 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Elab.Quotation.Precheck
 import Lean.Elab.Term
 import Lean.Elab.BindersUtil
+import Lean.Elab.SyntheticMVars
+import Lean.Elab.PreDefinition.TerminationHint
 
 namespace Lean.Elab.Term
 open Meta
@@ -68,30 +71,34 @@ def kindOfBinderName (binderName : Name) : LocalDeclKind :=
   else
     .default
 
-partial def quoteAutoTactic : Syntax → TermElabM Syntax
-  | stx@(.ident ..) => throwErrorAt stx "invalid auto tactic, identifier is not allowed"
+partial def quoteAutoTactic : Syntax → CoreM Expr
+  | .ident _ _ val preresolved =>
+    return mkApp4 (.const ``Syntax.ident [])
+      (.const ``SourceInfo.none [])
+      (.app (.const ``String.toSubstring []) (mkStrLit (toString val)))
+      (toExpr val)
+      (toExpr preresolved)
   | stx@(.node _ k args) => do
     if stx.isAntiquot then
       throwErrorAt stx "invalid auto tactic, antiquotation is not allowed"
     else
-      let mut quotedArgs ← `(Array.empty)
+      let ty := .const ``Syntax []
+      let mut quotedArgs := mkApp (.const ``Array.empty [.zero]) ty
       for arg in args do
         if k == nullKind && (arg.isAntiquotSuffixSplice || arg.isAntiquotSplice) then
           throwErrorAt arg "invalid auto tactic, antiquotation is not allowed"
         else
           let quotedArg ← quoteAutoTactic arg
-          quotedArgs ← `(Array.push $quotedArgs $quotedArg)
-      `(Syntax.node SourceInfo.none $(quote k) $quotedArgs)
-  | .atom _ val => `(mkAtom $(quote val))
+          quotedArgs := mkApp3 (.const ``Array.push [.zero]) ty quotedArgs quotedArg
+      return mkApp3 (.const ``Syntax.node []) (.const ``SourceInfo.none []) (toExpr k) quotedArgs
+  | .atom _ val => return .app (.const ``mkAtom []) (toExpr val)
   | .missing    => throwError "invalid auto tactic, tactic is missing"
 
 def declareTacticSyntax (tactic : Syntax) : TermElabM Name :=
   withFreshMacroScope do
     let name ← MonadQuotation.addMacroScope `_auto
     let type := Lean.mkConst `Lean.Syntax
-    let tactic ← quoteAutoTactic tactic
-    let value ← elabTerm tactic type
-    let value ← instantiateMVars value
+    let value ← quoteAutoTactic tactic
     trace[Elab.autoParam] value
     let decl := Declaration.defnDecl { name, levelParams := [], type, value, hints := .opaque,
                                        safety := DefinitionSafety.safe }
@@ -163,8 +170,9 @@ private def toBinderViews (stx : Syntax) : TermElabM (Array BinderView) := do
   else
     throwUnsupportedSyntax
 
-private def registerFailedToInferBinderTypeInfo (type : Expr) (ref : Syntax) : TermElabM Unit :=
+private def registerFailedToInferBinderTypeInfo (type : Expr) (ref : Syntax) : TermElabM Unit := do
   registerCustomErrorIfMVar type ref "failed to infer binder type"
+  registerLevelMVarErrorExprInfo type ref m!"failed to infer universe levels in binder type"
 
 def addLocalVarInfo (stx : Syntax) (fvar : Expr) : TermElabM Unit :=
   addTermInfo' (isBinder := true) stx fvar
@@ -570,7 +578,8 @@ def expandMatchAltsIntoMatchTactic (ref : Syntax) (matchAlts : Syntax) : MacroM 
 -/
 def expandMatchAltsWhereDecls (matchAltsWhereDecls : Syntax) : MacroM Syntax :=
   let matchAlts     := matchAltsWhereDecls[0]
-  let whereDeclsOpt := matchAltsWhereDecls[1]
+  -- matchAltsWhereDecls[1] is the termination hints, collected elsewhere
+  let whereDeclsOpt := matchAltsWhereDecls[2]
   let rec loop (i : Nat) (discrs : Array Syntax) : MacroM Syntax :=
     match i with
     | 0   => do
@@ -631,7 +640,7 @@ open Lean.Elab.Term.Quotation in
   | _ => throwUnsupportedSyntax
 
 /-- If `useLetExpr` is true, then a kernel let-expression `let x : type := val; body` is created.
-   Otherwise, we create a term of the form `(fun (x : type) => body) val`
+   Otherwise, we create a term of the form `letFun val (fun (x : type) => body)`
 
    The default elaboration order is `binders`, `typeStx`, `valStx`, and `body`.
    If `elabBodyFirst == true`, then we use the order `binders`, `typeStx`, `body`, and `valStx`. -/
@@ -639,8 +648,32 @@ def elabLetDeclAux (id : Syntax) (binders : Array Syntax) (typeStx : Syntax) (va
     (expectedType? : Option Expr) (useLetExpr : Bool) (elabBodyFirst : Bool) (usedLetOnly : Bool) : TermElabM Expr := do
   let (type, val, binders) ← elabBindersEx binders fun xs => do
     let (binders, fvars) := xs.unzip
-    let type ← elabType typeStx
-    registerCustomErrorIfMVar type typeStx "failed to infer 'let' declaration type"
+    /-
+    We use `withSynthesize` to ensure that any postponed elaboration problem
+    and nested tactics in `type` are resolved before elaborating `val`.
+    Resolved: we want to avoid synthetic opaque metavariables in `type`.
+    Recall that this kind of metavariable is non-assignable, and `isDefEq`
+    may waste a lot of time unfolding declarations before failing.
+    See issue #4051 for an example.
+
+    Here is the analysis for issue #4051.
+    - Given `have x : type := value; body`, we were previously elaborating `value` even
+      if `type` contained postponed elaboration problems.
+    - Moreover, the metavariables in `type` corresponding to postponed elaboration
+      problems cannot be assigned by `isDefEq` since the elaborator is supposed to assign them.
+    - Then, when checking whether type of `value` is definitionally equal to `type`,
+      a very long-time was spent unfolding a bunch of declarations before it failed.
+      In #4051, it was unfolding `Array.swaps` which is defined by well-founded recursion.
+      After the failure, the elaborator inserted a postponed coercion
+      that would be resolved later as soon as the types don't have unassigned metavariables.
+
+    We use `postpone := .partial` to allow type class (TC) resolution problems to be postponed
+    Recall that TC resolution does **not** produce synthetic opaque metavariables.
+    -/
+    let type ← withSynthesize (postpone := .partial) <| elabType typeStx
+    let letMsg := if useLetExpr then "let" else "have"
+    registerCustomErrorIfMVar type typeStx m!"failed to infer '{letMsg}' declaration type"
+    registerLevelMVarErrorExprInfo type typeStx m!"failed to infer universe levels in '{letMsg}' declaration type"
     if elabBodyFirst then
       let type ← mkForallFVars fvars type
       let val  ← mkFreshExprMVar type
@@ -668,12 +701,11 @@ def elabLetDeclAux (id : Syntax) (binders : Array Syntax) (typeStx : Syntax) (va
       let body ← instantiateMVars body
       mkLetFVars #[x] body (usedLetOnly := usedLetOnly)
   else
-    let f ← withLocalDecl id.getId (kind := kind) .default type fun x => do
+    withLocalDecl id.getId (kind := kind) .default type fun x => do
       addLocalVarInfo id x
       let body ← elabTermEnsuringType body expectedType?
       let body ← instantiateMVars body
-      mkLambdaFVars #[x] body (usedLetOnly := false)
-    pure <| mkLetFunAnnotation (mkApp f val)
+      mkLetFun x val body
   if elabBodyFirst then
     forallBoundedTelescope type binders.size fun xs type => do
       -- the original `fvars` from above are gone, so add back info manually
@@ -753,6 +785,9 @@ def elabLetDeclCore (stx : Syntax) (expectedType? : Option Expr) (useLetExpr : B
 @[builtin_term_elab «let_tmp»] def elabLetTmpDecl : TermElab :=
   fun stx expectedType? => elabLetDeclCore stx expectedType? (useLetExpr := true) (elabBodyFirst := false) (usedLetOnly := true)
 
-builtin_initialize registerTraceClass `Elab.let
+builtin_initialize
+  registerTraceClass `Elab.let
+  registerTraceClass `Elab.let.decl
+  registerTraceClass `Elab.autoParam
 
 end Lean.Elab.Term

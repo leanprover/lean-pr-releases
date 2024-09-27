@@ -3,6 +3,7 @@ Copyright (c) 2022 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Util.CollectLevelParams
 import Lean.Compiler.LCNF.Basic
 
@@ -29,7 +30,7 @@ structure State where
   /-- Counter for generating new (normalized) universe parameter names. -/
   nextIdx    : Nat := 1
   /-- Mapping from existing universe parameter names to the new ones. -/
-  map        : HashMap Name Level := {}
+  map        : Std.HashMap Name Level := {}
   /-- Parameters that have been normalized. -/
   paramNames : Array Name := #[]
 
@@ -48,7 +49,7 @@ partial def normLevel (u : Level) : M Level := do
     | .max v w  => return u.updateMax! (← normLevel v) (← normLevel w)
     | .imax v w => return u.updateIMax! (← normLevel v) (← normLevel w)
     | .mvar _   => unreachable!
-    | .param n  => match (← get).map.find? n with
+    | .param n  => match (← get).map[n]? with
       | some u => return u
       | none   =>
         let u := Level.param <| (`u).appendIndexAfter (← get).nextIdx

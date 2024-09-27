@@ -3,6 +3,7 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Compiler.InitAttr
 import Lean.Compiler.IR.CompilerM
 
@@ -50,8 +51,8 @@ end CollectUsedDecls
 def collectUsedDecls (env : Environment) (decl : Decl) (used : NameSet := {}) : NameSet :=
   (CollectUsedDecls.collectDecl decl env).run' used
 
-abbrev VarTypeMap  := HashMap VarId IRType
-abbrev JPParamsMap := HashMap JoinPointId (Array Param)
+abbrev VarTypeMap  := Std.HashMap VarId IRType
+abbrev JPParamsMap := Std.HashMap JoinPointId (Array Param)
 
 namespace CollectMaps
 abbrev Collector := (VarTypeMap × JPParamsMap) → (VarTypeMap × JPParamsMap)

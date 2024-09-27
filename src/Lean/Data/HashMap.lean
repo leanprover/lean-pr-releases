@@ -3,7 +3,11 @@ Copyright (c) 2018 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Leonardo de Moura
 -/
+prelude
+import Init.Data.Nat.Power2
 import Lean.Data.AssocList
+import Std.Data.HashMap.Basic
+import Std.Data.HashMap.Raw
 namespace Lean
 
 def HashMapBucket (α : Type u) (β : Type v) :=
@@ -12,6 +16,10 @@ def HashMapBucket (α : Type u) (β : Type v) :=
 def HashMapBucket.update {α : Type u} {β : Type v} (data : HashMapBucket α β) (i : USize) (d : AssocList α β) (h : i.toNat < data.val.size) : HashMapBucket α β :=
   ⟨ data.val.uset i d h,
     by erw [Array.size_set]; apply data.property ⟩
+
+@[simp] theorem HashMapBucket.size_update {α : Type u} {β : Type v} (data : HashMapBucket α β) (i : USize) (d : AssocList α β)
+    (h : i.toNat < data.val.size) : (data.update i d h).val.size = data.val.size := by
+  simp [update, Array.uset]
 
 structure HashMapImp (α : Type u) (β : Type v) where
   size       : Nat
@@ -38,7 +46,7 @@ private def mkIdx {sz : Nat} (hash : UInt64) (h : sz.isPowerOfTwo) : { u : USize
   if h' : u.toNat < sz then
     ⟨u, h'⟩
   else
-    ⟨0, by simp [USize.toNat, OfNat.ofNat, USize.ofNat, Fin.ofNat']; apply Nat.pos_of_isPowerOfTwo h⟩
+    ⟨0, by simp [USize.toNat, OfNat.ofNat, USize.ofNat]; apply Nat.pos_of_isPowerOfTwo h⟩
 
 @[inline] def reinsertAux (hashFn : α → UInt64) (data : HashMapBucket α β) (a : α) (b : β) : HashMapBucket α β :=
   let ⟨i, h⟩ := mkIdx (hashFn a) data.property
@@ -89,7 +97,8 @@ def moveEntries [Hashable α] (i : Nat) (source : Array (AssocList α β)) (targ
      let target                := es.foldl (reinsertAux hash) target
      moveEntries (i+1) source target
   else target
-termination_by _ i source _ => source.size - i
+termination_by source.size - i
+decreasing_by simp_wf; decreasing_trivial_pre_omega
 
 def expand [Hashable α] (size : Nat) (buckets : HashMapBucket α β) : HashMapImp α β :=
   let bucketsNew : HashMapBucket α β := ⟨
@@ -105,7 +114,9 @@ def expand [Hashable α] (size : Nat) (buckets : HashMapBucket α β) : HashMapI
     let ⟨i, h⟩ := mkIdx (hash a) buckets.property
     let bkt    := buckets.val[i]
     if bkt.contains a then
-      (⟨size, buckets.update i (bkt.replace a b) h⟩, true)
+      -- make sure `bkt` is used linearly in the following call to `replace`
+      let buckets' := buckets.update i .nil h
+      (⟨size, buckets'.update i (bkt.replace a b) (by simpa [buckets'])⟩, true)
     else
       let size'    := size + 1
       let buckets' := buckets.update i (AssocList.cons a b bkt) h
@@ -114,18 +125,39 @@ def expand [Hashable α] (size : Nat) (buckets : HashMapBucket α β) : HashMapI
       else
         (expand size' buckets', false)
 
+@[inline] def insertIfNew [beq : BEq α] [Hashable α] (m : HashMapImp α β) (a : α) (b : β) : HashMapImp α β × Option β :=
+  match m with
+  | ⟨size, buckets⟩ =>
+    let ⟨i, h⟩ := mkIdx (hash a) buckets.property
+    let bkt    := buckets.val[i]
+    if let some b := bkt.find? a then
+      (⟨size, buckets⟩, some b)
+    else
+      let size'    := size + 1
+      let buckets' := buckets.update i (AssocList.cons a b bkt) h
+      if numBucketsForCapacity size' ≤ buckets.val.size then
+        ({ size := size', buckets := buckets' }, none)
+      else
+        (expand size' buckets', none)
+
+
 def erase [BEq α] [Hashable α] (m : HashMapImp α β) (a : α) : HashMapImp α β :=
   match m with
   | ⟨ size, buckets ⟩ =>
     let ⟨i, h⟩ := mkIdx (hash a) buckets.property
     let bkt    := buckets.val[i]
-    if bkt.contains a then ⟨size - 1, buckets.update i (bkt.erase a) h⟩
-    else m
+    if bkt.contains a then
+      -- make sure `bkt` is used linearly in the following call to `erase`
+      let buckets' := buckets.update i .nil h
+      ⟨size - 1, buckets'.update i (bkt.erase a) (by simpa [buckets'])⟩
+    else
+      ⟨size, buckets⟩
 
 inductive WellFormed [BEq α] [Hashable α] : HashMapImp α β → Prop where
-  | mkWff     : ∀ n,                    WellFormed (mkHashMapImp n)
-  | insertWff : ∀ m a b, WellFormed m → WellFormed (insert m a b |>.1)
-  | eraseWff  : ∀ m a,   WellFormed m → WellFormed (erase m a)
+  | mkWff          : ∀ n,                    WellFormed (mkHashMapImp n)
+  | insertWff      : ∀ m a b, WellFormed m → WellFormed (insert m a b |>.1)
+  | insertIfNewWff : ∀ m a b, WellFormed m → WellFormed (insertIfNew m a b |>.1)
+  | eraseWff       : ∀ m a,   WellFormed m → WellFormed (erase m a)
 
 end HashMapImp
 
@@ -154,12 +186,21 @@ def insert (m : HashMap α β) (a : α) (b : β) : HashMap α β :=
     match h:m.insert a b with
     | (m', _) => ⟨ m', by have aux := WellFormed.insertWff m a b hw; rw [h] at aux; assumption ⟩
 
-/-- Similar to `insert`, but also returns a Boolean flad indicating whether an existing entry has been replaced with `a -> b`. -/
+/-- Similar to `insert`, but also returns a Boolean flag indicating whether an existing entry has been replaced with `a -> b`. -/
 def insert' (m : HashMap α β) (a : α) (b : β) : HashMap α β × Bool :=
   match m with
   | ⟨ m, hw ⟩ =>
     match h:m.insert a b with
     | (m', replaced) => (⟨ m', by have aux := WellFormed.insertWff m a b hw; rw [h] at aux; assumption ⟩, replaced)
+
+/--
+Similar to `insert`, but returns `some old` if the map already had an entry `α → old`.
+If the result is `some old`, the resulting map is equal to `m`. -/
+def insertIfNew (m : HashMap α β) (a : α) (b : β) : HashMap α β × Option β :=
+  match m with
+  | ⟨ m, hw ⟩ =>
+    match h:m.insertIfNew a b with
+    | (m', old) => (⟨ m', by have aux := WellFormed.insertIfNewWff m a b hw; rw [h] at aux; assumption ⟩, old)
 
 @[inline] def erase (m : HashMap α β) (a : α) : HashMap α β :=
   match m with
@@ -216,6 +257,8 @@ def toArray (m : HashMap α β) : Array (α × β) :=
 def numBuckets (m : HashMap α β) : Nat :=
   m.val.buckets.val.size
 
+variable [BEq α] [Hashable α]
+
 /-- Builds a `HashMap` from a list of key-value pairs. Values of duplicated keys are replaced by their respective last occurrences. -/
 def ofList (l : List (α × β)) : HashMap α β :=
   l.foldl (init := HashMap.empty) (fun m p => m.insert p.fst p.snd)
@@ -227,3 +270,12 @@ def ofListWith (l : List (α × β)) (f : β → β → β) : HashMap α β :=
       match m.find? p.fst with
         | none   => m.insert p.fst p.snd
         | some v => m.insert p.fst $ f v p.snd)
+
+attribute [deprecated Std.HashMap] HashMap
+attribute [deprecated Std.HashMap.Raw] HashMapImp
+attribute [deprecated Std.HashMap.Raw.empty] mkHashMapImp
+attribute [deprecated Std.HashMap.empty] mkHashMap
+attribute [deprecated Std.HashMap.empty] HashMap.empty
+attribute [deprecated Std.HashMap.ofList] HashMap.ofList
+
+end Lean.HashMap

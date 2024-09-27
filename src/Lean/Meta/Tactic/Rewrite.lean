@@ -3,10 +3,12 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Meta.AppBuilder
 import Lean.Meta.MatchUtil
 import Lean.Meta.KAbstract
 import Lean.Meta.Check
+import Lean.Meta.Tactic.Util
 import Lean.Meta.Tactic.Apply
 
 namespace Lean.Meta
@@ -23,6 +25,7 @@ def _root_.Lean.MVarId.rewrite (mvarId : MVarId) (e : Expr) (heq : Expr)
     (symm : Bool := false) (config := { : Rewrite.Config }) : MetaM RewriteResult :=
   mvarId.withContext do
     mvarId.checkNotAssigned `rewrite
+    let heqIn := heq
     let heqType ← instantiateMVars (← inferType heq)
     let (newMVars, binderInfos, heqType) ← forallMetaTelescopeReducing heqType
     let heq := mkAppN heq newMVars
@@ -40,16 +43,21 @@ def _root_.Lean.MVarId.rewrite (mvarId : MVarId) (e : Expr) (heq : Expr)
           -- construct rewrite proof
           let eNew := eAbst.instantiate1 rhs
           let eNew ← instantiateMVars eNew
-          let eEqE ← mkEq e e
-          let eEqEAbst := mkApp eEqE.appFn! eAbst
-          let motive := Lean.mkLambda `_a BinderInfo.default α eEqEAbst
+          let eType ← inferType e
+          let motive := Lean.mkLambda `_a BinderInfo.default α eAbst
           unless (← isTypeCorrect motive) do
             throwTacticEx `rewrite mvarId "motive is not type correct"
-          let eqRefl ← mkEqRefl e
-          let eqPrf ← mkEqNDRec motive eqRefl heq
+          unless (← withLocalDeclD `_a α fun a => do isDefEq (← inferType (eAbst.instantiate1 a)) eType) do
+            -- NB: using motive.arrow? would disallow motives where the dependency
+            -- can be reduced away
+            throwTacticEx `rewrite mvarId "motive is dependent"
+          let u1 ← getLevel α
+          let u2 ← getLevel eType
+          let eqPrf := mkApp6 (.const ``congrArg [u1, u2]) α eType lhs rhs motive heq
           postprocessAppMVars `rewrite mvarId newMVars binderInfos
+            (synthAssignedInstances := !tactic.skipAssignedInstances.get (← getOptions))
           let newMVarIds ← newMVars.map Expr.mvarId! |>.filterM fun mvarId => not <$> mvarId.isAssigned
-          let otherMVarIds ← getMVarsNoDelayed eqPrf
+          let otherMVarIds ← getMVarsNoDelayed heqIn
           let otherMVarIds := otherMVarIds.filter (!newMVarIds.contains ·)
           let newMVarIds := newMVarIds ++ otherMVarIds
           pure { eNew := eNew, eqProof := eqPrf, mvarIds := newMVarIds.toList }
@@ -66,10 +74,5 @@ def _root_.Lean.MVarId.rewrite (mvarId : MVarId) (e : Expr) (heq : Expr)
       cont heq heqType
     | none =>
       cont heq heqType
-
-@[deprecated MVarId.rewrite]
-def rewrite (mvarId : MVarId) (e : Expr) (heq : Expr)
-    (symm : Bool := false) (config := { : Rewrite.Config }) : MetaM RewriteResult :=
-  mvarId.rewrite e heq symm config
 
 end Lean.Meta

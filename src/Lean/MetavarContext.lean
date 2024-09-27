@@ -3,6 +3,8 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
+import Init.ShareCommon
 import Lean.Util.MonadCache
 import Lean.LocalContext
 
@@ -15,76 +17,79 @@ assignments. It is used in the elaborator, tactic framework, unifier
 the requirements imposed by these modules.
 
 - We may invoke TC while executing `isDefEq`. We need this feature to
-be able to solve unification problems such as:
-```
-f ?a (ringAdd ?s) ?x ?y =?= f Int intAdd n m
-```
-where `(?a : Type) (?s : Ring ?a) (?x ?y : ?a)`
-During `isDefEq` (i.e., unification), it will need to solve the constrain
-```
-ringAdd ?s =?= intAdd
-```
-We say `ringAdd ?s` is stuck because it cannot be reduced until we
-synthesize the term `?s : Ring ?a` using TC. This can be done since we
-have assigned `?a := Int` when solving `?a =?= Int`.
+  be able to solve unification problems such as:
+  ```
+  f ?a (ringAdd ?s) ?x ?y =?= f Int intAdd n m
+  ```
+  where `(?a : Type) (?s : Ring ?a) (?x ?y : ?a)`.
+
+  During `isDefEq` (i.e., unification), it will need to solve the constraint
+  ```
+  ringAdd ?s =?= intAdd
+  ```
+  We say `ringAdd ?s` is stuck because it cannot be reduced until we
+  synthesize the term `?s : Ring ?a` using TC. This can be done since we
+  have assigned `?a := Int` when solving `?a =?= Int`.
 
 - TC uses `isDefEq`, and `isDefEq` may create TC problems as shown
-above. Thus, we may have nested TC problems.
+  above. Thus, we may have nested TC problems.
 
 - `isDefEq` extends the local context when going inside binders. Thus,
-the local context for nested TC may be an extension of the local
-context for outer TC.
+  the local context for nested TC may be an extension of the local
+  context for outer TC.
 
 - TC should not assign metavariables created by the elaborator, simp,
-tactic framework, and outer TC problems. Reason: TC commits to the
-first solution it finds. Consider the TC problem `Coe Nat ?x`,
-where `?x` is a metavariable created by the caller. There are many
-solutions to this problem (e.g., `?x := Int`, `?x := Real`, ...),
-and it doesn’t make sense to commit to the first one since TC does
-not know the constraints the caller may impose on `?x` after the
-TC problem is solved.
-Remark: we claim it is not feasible to make the whole system backtrackable,
-and allow the caller to backtrack back to TC and ask it for another solution
-if the first one found did not work. We claim it would be too inefficient.
+  tactic framework, and outer TC problems. Reason: TC commits to the
+  first solution it finds. Consider the TC problem `Coe Nat ?x`,
+  where `?x` is a metavariable created by the caller. There are many
+  solutions to this problem (e.g., `?x := Int`, `?x := Real`, ...),
+  and it doesn’t make sense to commit to the first one since TC does
+  not know the constraints the caller may impose on `?x` after the
+  TC problem is solved.
+
+  Remark: we claim it is not feasible to make the whole system backtrackable,
+  and allow the caller to backtrack back to TC and ask it for another solution
+  if the first one found did not work. We claim it would be too inefficient.
 
 - TC metavariables should not leak outside of TC. Reason: we want to
-get rid of them after we synthesize the instance.
+  get rid of them after we synthesize the instance.
 
 - `simp` invokes `isDefEq` for matching the left-hand-side of
-equations to terms in our goal. Thus, it may invoke TC indirectly.
+  equations to terms in our goal. Thus, it may invoke TC indirectly.
 
 - In Lean3, we didn’t have to create a fresh pattern for trying to
-match the left-hand-side of equations when executing `simp`. We had a
-mechanism called "tmp" metavariables. It avoided this overhead, but it
-created many problems since `simp` may indirectly call TC which may
-recursively call TC. Moreover, we may want to allow TC to invoke
-tactics in the future. Thus, when `simp` invokes `isDefEq`, it may indirectly invoke
-a tactic and `simp` itself.  The Lean3 approach assumed that
-metavariables were short-lived, this is not true in Lean4, and to some
-extent was also not true in Lean3 since `simp`, in principle, could
-trigger an arbitrary number of nested TC problems.
+  match the left-hand-side of equations when executing `simp`. We had a
+  mechanism called "tmp" metavariables. It avoided this overhead, but it
+  created many problems since `simp` may indirectly call TC which may
+  recursively call TC. Moreover, we may want to allow TC to invoke
+  tactics in the future. Thus, when `simp` invokes `isDefEq`, it may indirectly invoke
+  a tactic and `simp` itself.  The Lean3 approach assumed that
+  metavariables were short-lived, this is not true in Lean4, and to some
+  extent was also not true in Lean3 since `simp`, in principle, could
+  trigger an arbitrary number of nested TC problems.
 
 - Here are some possible call stack traces we could have in Lean3 (and Lean4).
-```
-Elaborator (-> TC -> isDefEq)+
-Elaborator -> isDefEq (-> TC -> isDefEq)*
-Elaborator -> simp -> isDefEq (-> TC -> isDefEq)*
-```
-In Lean4, TC may also invoke tactics in the future.
+  ```
+  Elaborator (-> TC -> isDefEq)+
+  Elaborator -> isDefEq (-> TC -> isDefEq)*
+  Elaborator -> simp -> isDefEq (-> TC -> isDefEq)*
+  ```
+  In Lean4, TC may also invoke tactics in the future.
 
 - In Lean3 and Lean4, TC metavariables are not really short-lived. We
-solve an arbitrary number of unification problems, and we may have
-nested TC invocations.
+  solve an arbitrary number of unification problems, and we may have
+  nested TC invocations.
 
 - TC metavariables do not share the same local context even in the
-same invocation. In the C++ and Lean implementations we use a trick to
-ensure they do:
-https://github.com/leanprover/lean/blob/92826917a252a6092cffaf5fc5f1acb1f8cef379/src/library/type_context.cpp#L3583-L3594
+  same invocation. In the C++ and Lean implementations we use a trick to
+  ensure they do:
+  <https://github.com/leanprover/lean/blob/92826917a252a6092cffaf5fc5f1acb1f8cef379/src/library/type_context.cpp#L3583-L3594>
 
 - Metavariables may be natural, synthetic or syntheticOpaque.
-  a) Natural metavariables may be assigned by unification (i.e., `isDefEq`).
 
-  b) Synthetic metavariables may still be assigned by unification,
+  1. Natural metavariables may be assigned by unification (i.e., `isDefEq`).
+
+  2. Synthetic metavariables may still be assigned by unification,
      but whenever possible `isDefEq` will avoid the assignment. For example,
      if we have the unification constraint `?m =?= ?n`, where `?m` is synthetic,
      but `?n` is not, `isDefEq` solves it by using the assignment `?n := ?m`.
@@ -94,7 +99,7 @@ https://github.com/leanprover/lean/blob/92826917a252a6092cffaf5fc5f1acb1f8cef379
      them, and check whether the synthesized result is compatible with the one
      assigned by `isDefEq`.
 
-  c) SyntheticOpaque metavariables are never assigned by `isDefEq`.
+  3. SyntheticOpaque metavariables are never assigned by `isDefEq`.
      That is, the constraint `?n =?= Nat.succ Nat.zero` always fail
      if `?n` is a syntheticOpaque metavariable. This kind of metavariable
      is created by tactics such as `intro`. Reason: in the tactic framework,
@@ -104,78 +109,80 @@ https://github.com/leanprover/lean/blob/92826917a252a6092cffaf5fc5f1acb1f8cef379
   This distinction was not precise in Lean3 and produced
   counterintuitive behavior. For example, the following hack was added
   in Lean3 to work around one of these issues:
-  https://github.com/leanprover/lean/blob/92826917a252a6092cffaf5fc5f1acb1f8cef379/src/library/type_context.cpp#L2751
+  <https://github.com/leanprover/lean/blob/92826917a252a6092cffaf5fc5f1acb1f8cef379/src/library/type_context.cpp#L2751>
 
 - When creating lambda/forall expressions, we need to convert/abstract
-free variables and convert them to bound variables. Now, suppose we are
-trying to create a lambda/forall expression by abstracting free
-variable `xs` and a term `t[?m]` which contains a metavariable `?m`,
-and the local context of `?m` contains `xs`. The term
-```
-fun xs => t[?m]
-```
-will be ill-formed if we later assign a term `s` to `?m`, and
-`s` contains free variables in `xs`. We address this issue by changing
-the free variable abstraction procedure. We consider two cases: `?m`
-is natural or synthetic, or `?m` is syntheticOpaque. Assume the type of `?m` is
-`A[xs]`. Then, in both cases we create an auxiliary metavariable `?n` with
-type `forall xs => A[xs]`, and local context := local context of `?m` - `xs`.
-In both cases, we produce the term `fun xs => t[?n xs]`
-
-  1- If `?m` is natural or synthetic, then we assign `?m := ?n xs`, and we produce
-  the term `fun xs => t[?n xs]`
-
-  2- If `?m` is syntheticOpaque, then we mark `?n` as a syntheticOpaque variable.
-  However, `?n` is managed by the metavariable context itself.
-  We say we have a "delayed assignment" `?n xs := ?m`.
-  That is, after a term `s` is assigned to `?m`, and `s`
-  does not contain metavariables, we replace any occurrence
-  `?n ts` with `s[xs := ts]`.
-
-Gruesome details:
-
-  - When we create the type `forall xs => A` for `?n`, we may
-  encounter the same issue if `A` contains metavariables. So, the
-  process above is recursive. We claim it terminates because we keep
-  creating new metavariables with smaller local contexts.
-
-  - Suppose, we have `t[?m]` and we want to create a let-expression by
-  abstracting a let-decl free variable `x`, and the local context of
-  `?m` contains `x`. Similarly to the previous case
+  free variables and convert them to bound variables. Now, suppose we are
+  trying to create a lambda/forall expression by abstracting free
+  variable `xs` and a term `t[?m]` which contains a metavariable `?m`,
+  and the local context of `?m` contains `xs`. The term
   ```
-  let x : T := v; t[?m]
+  fun xs => t[?m]
   ```
   will be ill-formed if we later assign a term `s` to `?m`, and
-  `s` contains free variable `x`. Again, assume the type of `?m` is `A[x]`.
+  `s` contains free variables in `xs`. We address this issue by changing
+  the free variable abstraction procedure. We consider two cases: `?m`
+  is natural or synthetic, or `?m` is syntheticOpaque. Assume the type of `?m` is
+  `A[xs]`. Then, in both cases we create an auxiliary metavariable `?n` with
+  type `forall xs => A[xs]`, and local context := local context of `?m` - `xs`.
+  In both cases, we produce the term `fun xs => t[?n xs]`
 
-    1- If `?m` is natural or synthetic, then we create `?n : (let x : T := v; A[x])` with
-    and local context := local context of `?m` - `x`, we assign `?m := ?n`,
-    and produce the term `let x : T := v; t[?n]`. That is, we are just making
-    sure `?n` must never be assigned to a term containing `x`.
+  1. If `?m` is natural or synthetic, then we assign `?m := ?n xs`, and we produce
+     the term `fun xs => t[?n xs]`
 
-    2- If `?m` is syntheticOpaque, we create a fresh syntheticOpaque `?n`
-    with type `?n : T -> (let x : T := v; A[x])` and local context := local context of `?m` - `x`,
-    create the delayed assignment `?n #[x] := ?m`, and produce the term `let x : T := v; t[?n x]`.
-    Now suppose we assign `s` to `?m`. We do not assign the term `fun (x : T) => s` to `?n`, since
-    `fun (x : T) => s` may not even be type correct. Instead, we just replace applications `?n r`
-    with `s[x/r]`. The term `r` may not necessarily be a bound variable. For example, a tactic
-    may have reduced `let x : T := v; t[?n x]` into `t[?n v]`.
-    We are essentially using the pair "delayed assignment + application" to implement a delayed
-    substitution.
+  2. If `?m` is syntheticOpaque, then we mark `?n` as a syntheticOpaque variable.
+     However, `?n` is managed by the metavariable context itself.
+     We say we have a "delayed assignment" `?n xs := ?m`.
+     That is, after a term `s` is assigned to `?m`, and `s`
+     does not contain metavariables, we replace any occurrence
+     `?n ts` with `s[xs := ts]`.
+
+  Gruesome details:
+
+  - When we create the type `forall xs => A` for `?n`, we may
+    encounter the same issue if `A` contains metavariables. So, the
+    process above is recursive. We claim it terminates because we keep
+    creating new metavariables with smaller local contexts.
+
+  - Suppose, we have `t[?m]` and we want to create a let-expression by
+    abstracting a let-decl free variable `x`, and the local context of
+    `?m` contains `x`. Similarly to the previous case
+    ```
+    let x : T := v; t[?m]
+    ```
+    will be ill-formed if we later assign a term `s` to `?m`, and
+    `s` contains free variable `x`. Again, assume the type of `?m` is `A[x]`.
+
+    1. If `?m` is natural or synthetic, then we create `?n : (let x : T := v; A[x])` with
+       and local context := local context of `?m` - `x`, we assign `?m := ?n`,
+       and produce the term `let x : T := v; t[?n]`. That is, we are just making
+       sure `?n` must never be assigned to a term containing `x`.
+
+    2. If `?m` is syntheticOpaque, we create a fresh syntheticOpaque `?n`
+       with type `?n : T -> (let x : T := v; A[x])` and local context := local context of `?m` - `x`,
+       create the delayed assignment `?n #[x] := ?m`, and produce the term `let x : T := v; t[?n x]`.
+
+       Now suppose we assign `s` to `?m`. We do not assign the term `fun (x : T) => s` to `?n`, since
+       `fun (x : T) => s` may not even be type correct. Instead, we just replace applications `?n r`
+       with `s[x/r]`. The term `r` may not necessarily be a bound variable. For example, a tactic
+       may have reduced `let x : T := v; t[?n x]` into `t[?n v]`.
+
+       We are essentially using the pair "delayed assignment + application" to implement a delayed
+       substitution.
 
 - We use TC for implementing coercions. Both Joe Hendrix and Reid Barton
-reported a nasty limitation. In Lean3, TC will not be used if there are
-metavariables in the TC problem. For example, the elaborator will not try
-to synthesize `Coe Nat ?x`. This is good, but this constraint is too
-strict for problems such as `Coe (Vector Bool ?n) (BV ?n)`. The coercion
-exists independently of `?n`. Thus, during TC, we want `isDefEq` to throw
-an exception instead of return `false` whenever it tries to assign
-a metavariable owned by its caller. The idea is to sign to the caller that
-it cannot solve the TC problem at this point, and more information is needed.
-That is, the caller must make progress an assign its metavariables before
-trying to invoke TC again.
+  reported a nasty limitation. In Lean3, TC will not be used if there are
+  metavariables in the TC problem. For example, the elaborator will not try
+  to synthesize `Coe Nat ?x`. This is good, but this constraint is too
+  strict for problems such as `Coe (Vector Bool ?n) (BV ?n)`. The coercion
+  exists independently of `?n`. Thus, during TC, we want `isDefEq` to throw
+  an exception instead of return `false` whenever it tries to assign
+  a metavariable owned by its caller. The idea is to sign to the caller that
+  it cannot solve the TC problem at this point, and more information is needed.
+  That is, the caller must make progress and assign its metavariables before
+  trying to invoke TC again.
 
-In Lean4, we are using a simpler design for the `MetavarContext`.
+  In Lean4, we are using a simpler design for the `MetavarContext`.
 
 - No distinction between temporary and regular metavariables.
 
@@ -184,6 +191,7 @@ In Lean4, we are using a simpler design for the `MetavarContext`.
 - MetavarContext also has a `depth` field.
 
 - We bump the `MetavarContext` depth when we create a nested problem.
+
   Example: Elaborator (depth = 0) -> Simplifier matcher (depth = 1) -> TC (level = 2) -> TC (level = 3) -> ...
 
 - When `MetavarContext` is at depth N, `isDefEq` does not assign variables from `depth < N`.
@@ -192,11 +200,12 @@ In Lean4, we are using a simpler design for the `MetavarContext`.
 
 - New design even allows us to invoke tactics from TC.
 
-* Main concern
-We don't have tmp metavariables anymore in Lean4. Thus, before trying to match
-the left-hand-side of an equation in `simp`. We first must bump the level of the `MetavarContext`,
-create fresh metavariables, then create a new pattern by replacing the free variable on the left-hand-side with
-these metavariables. We are hoping to minimize this overhead by
+- Main concern
+
+  We don't have tmp metavariables anymore in Lean4. Thus, before trying to match
+  the left-hand-side of an equation in `simp`. We first must bump the level of the `MetavarContext`,
+  create fresh metavariables, then create a new pattern by replacing the free variable on the left-hand-side with
+  these metavariables. We are hoping to minimize this overhead by
 
   - Using better indexing data structures in `simp`. They should reduce the number of time `simp` must invoke `isDefEq`.
 
@@ -328,10 +337,16 @@ structure MetavarContext where
   For more information about delayed abstraction, see the docstring for `DelayedMetavarAssignment`. -/
   dAssignment    : PersistentHashMap MVarId DelayedMetavarAssignment := {}
 
+instance : Inhabited MetavarContext := ⟨{}⟩
+
 /-- A monad with a stateful metavariable context, defining `getMCtx` and `modifyMCtx`. -/
 class MonadMCtx (m : Type → Type) where
   getMCtx    : m MetavarContext
   modifyMCtx : (MetavarContext → MetavarContext) → m Unit
+
+instance : MonadMCtx (StateM MetavarContext) where
+  getMCtx := get
+  modifyMCtx := modify
 
 export MonadMCtx (getMCtx modifyMCtx)
 
@@ -346,14 +361,29 @@ abbrev setMCtx [MonadMCtx m] (mctx : MetavarContext) : m Unit :=
 abbrev getLevelMVarAssignment? [Monad m] [MonadMCtx m] (mvarId : LMVarId) : m (Option Level) :=
   return (← getMCtx).lAssignment.find? mvarId
 
+@[export lean_get_lmvar_assignment]
+def getLevelMVarAssignmentExp (m : MetavarContext) (mvarId : LMVarId) : Option Level :=
+  m.lAssignment.find? mvarId
+
 def MetavarContext.getExprAssignmentCore? (m : MetavarContext) (mvarId : MVarId) : Option Expr :=
+  m.eAssignment.find? mvarId
+
+@[export lean_get_mvar_assignment]
+def MetavarContext.getExprAssignmentExp (m : MetavarContext) (mvarId : MVarId) : Option Expr :=
   m.eAssignment.find? mvarId
 
 def getExprMVarAssignment? [Monad m] [MonadMCtx m] (mvarId : MVarId) : m (Option Expr) :=
   return (← getMCtx).getExprAssignmentCore? mvarId
 
+def MetavarContext.getDelayedMVarAssignmentCore? (mctx : MetavarContext) (mvarId : MVarId) : Option DelayedMetavarAssignment :=
+  mctx.dAssignment.find? mvarId
+
+@[export lean_get_delayed_mvar_assignment]
+def MetavarContext.getDelayedMVarAssignmentExp (mctx : MetavarContext) (mvarId : MVarId) : Option DelayedMetavarAssignment :=
+  mctx.dAssignment.find? mvarId
+
 def getDelayedMVarAssignment? [Monad m] [MonadMCtx m] (mvarId : MVarId) : m (Option DelayedMetavarAssignment) :=
-  return (← getMCtx).dAssignment.find? mvarId
+  return (← getMCtx).getDelayedMVarAssignmentCore? mvarId
 
 /-- Given a sequence of delayed assignments
    ```
@@ -375,16 +405,20 @@ def isLevelMVarAssigned [Monad m] [MonadMCtx m] (mvarId : LMVarId) : m Bool :=
 def _root_.Lean.MVarId.isAssigned [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
   return (← getMCtx).eAssignment.contains mvarId
 
-@[deprecated MVarId.isAssigned]
-def isExprMVarAssigned [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool := do
-  mvarId.isAssigned
-
 def _root_.Lean.MVarId.isDelayedAssigned [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
   return (← getMCtx).dAssignment.contains mvarId
 
-@[deprecated MVarId.isDelayedAssigned]
-def isMVarDelayedAssigned [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool := do
-  mvarId.isDelayedAssigned
+/--
+Check whether a metavariable is assigned or delayed-assigned. A
+delayed-assigned metavariable is already 'solved' but the solution cannot be
+substituted yet because we have to wait for some other metavariables to be
+assigned first. So in many situations you want to treat a delayed-assigned
+metavariable as assigned.
+-/
+def _root_.Lean.MVarId.isAssignedOrDelayedAssigned [Monad m] [MonadMCtx m] (mvarId : MVarId) :
+    m Bool := do
+  let mctx ← getMCtx
+  return mctx.eAssignment.contains mvarId || mctx.dAssignment.contains mvarId
 
 def isLevelMVarAssignable [Monad m] [MonadMCtx m] (mvarId : LMVarId) : m Bool := do
   let mctx ← getMCtx
@@ -401,10 +435,6 @@ def _root_.Lean.MVarId.isAssignable [Monad m] [MonadMCtx m] (mvarId : MVarId) : 
   let mctx ← getMCtx
   let decl := mctx.getDecl mvarId
   return decl.depth == mctx.depth
-
-@[deprecated MVarId.isAssignable]
-def isExprMVarAssignable [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool := do
-  mvarId.isAssignable
 
 /-- Return true iff the given level contains an assigned metavariable. -/
 def hasAssignedLevelMVar [Monad m] [MonadMCtx m] : Level → m Bool
@@ -463,6 +493,10 @@ def hasAssignableMVar [Monad m] [MonadMCtx m] : Expr → m Bool
 def assignLevelMVar [MonadMCtx m] (mvarId : LMVarId) (val : Level) : m Unit :=
   modifyMCtx fun m => { m with lAssignment := m.lAssignment.insert mvarId val }
 
+@[export lean_assign_lmvar]
+def assignLevelMVarExp (m : MetavarContext) (mvarId : LMVarId) (val : Level) : MetavarContext :=
+  { m with lAssignment := m.lAssignment.insert mvarId val }
+
 /--
 Add `mvarId := x` to the metavariable assignment.
 This method does not check whether `mvarId` is already assigned, nor it checks whether
@@ -472,15 +506,20 @@ This is a low-level API, and it is safer to use `isDefEq (mkMVar mvarId) x`.
 def _root_.Lean.MVarId.assign [MonadMCtx m] (mvarId : MVarId) (val : Expr) : m Unit :=
   modifyMCtx fun m => { m with eAssignment := m.eAssignment.insert mvarId val }
 
-@[deprecated MVarId.assign]
-def assignExprMVar [MonadMCtx m] (mvarId : MVarId) (val : Expr) : m Unit :=
-  mvarId.assign val
+@[export lean_assign_mvar]
+def assignExp (m : MetavarContext) (mvarId : MVarId) (val : Expr) : MetavarContext :=
+  { m with eAssignment := m.eAssignment.insert mvarId val }
 
+/--
+Add a delayed assignment for the given metavariable. You must make sure that
+the metavariable is not already assigned or delayed-assigned.
+-/
 def assignDelayedMVar [MonadMCtx m] (mvarId : MVarId) (fvars : Array Expr) (mvarIdPending : MVarId) : m Unit :=
   modifyMCtx fun m => { m with dAssignment := m.dAssignment.insert mvarId { fvars, mvarIdPending } }
 
 /-!
-Notes on artificial eta-expanded terms due to metavariables.
+## Notes on artificial eta-expanded terms due to metavariables.
+
 We try avoid synthetic terms such as `((fun x y => t) a b)` in the output produced by the elaborator.
 This kind of term may be generated when instantiating metavariable assignments.
 This module tries to avoid their generation because they often introduce unnecessary dependencies and
@@ -491,98 +530,31 @@ all free variables that may be used to "fill" the hole. Suppose, we create a met
 containing `(x : Nat) (y : Nat) (b : Bool)`, then we can assign terms such as `x + y` to `?m` since `x` and `y`
 are in the context used to create `?m`. Now, suppose we have the term `?m + 1` and we want to create the lambda expression
 `fun x => ?m + 1`. This term is not correct since we may assign to `?m` a term containing `x`.
+
 We address this issue by create a synthetic metavariable `?n : Nat → Nat` and adding the delayed assignment
 `?n #[x] := ?m`, and the term `fun x => ?n x + 1`. When we later assign a term `t[x]` to `?m`, `fun x => t[x]` is assigned to
 `?n`, and if we substitute it at `fun x => ?n x + 1`, we produce `fun x => ((fun x => t[x]) x) + 1`.
+
 To avoid this term eta-expanded term, we apply beta-reduction when instantiating metavariable assignments in this module.
 This operation is performed at `instantiateExprMVars`, `elimMVarDeps`, and `levelMVarToParam`.
 -/
 
-partial def instantiateLevelMVars [Monad m] [MonadMCtx m] : Level → m Level
-  | lvl@(Level.succ lvl₁)      => return Level.updateSucc! lvl (← instantiateLevelMVars lvl₁)
-  | lvl@(Level.max lvl₁ lvl₂)  => return Level.updateMax! lvl (← instantiateLevelMVars lvl₁) (← instantiateLevelMVars lvl₂)
-  | lvl@(Level.imax lvl₁ lvl₂) => return Level.updateIMax! lvl (← instantiateLevelMVars lvl₁) (← instantiateLevelMVars lvl₂)
-  | lvl@(Level.mvar mvarId)    => do
-    match (← getLevelMVarAssignment? mvarId) with
-    | some newLvl =>
-      if !newLvl.hasMVar then pure newLvl
-      else do
-        let newLvl' ← instantiateLevelMVars newLvl
-        assignLevelMVar mvarId newLvl'
-        pure newLvl'
-    | none        => pure lvl
-  | lvl => pure lvl
+@[extern "lean_instantiate_level_mvars"]
+opaque instantiateLevelMVarsImp (mctx : MetavarContext) (l : Level) : MetavarContext × Level
+
+partial def instantiateLevelMVars [Monad m] [MonadMCtx m] (l : Level) : m Level := do
+  let (mctx, lNew) := instantiateLevelMVarsImp (← getMCtx) l
+  setMCtx mctx
+  return lNew
+
+@[extern "lean_instantiate_expr_mvars"]
+opaque instantiateExprMVarsImp (mctx : MetavarContext) (e : Expr) : MetavarContext × Expr
 
 /-- instantiateExprMVars main function -/
-partial def instantiateExprMVars [Monad m] [MonadMCtx m] [STWorld ω m] [MonadLiftT (ST ω) m] (e : Expr) : MonadCacheT ExprStructEq Expr m Expr :=
-  if !e.hasMVar then
-    pure e
-  else checkCache { val := e : ExprStructEq } fun _ => do match e with
-    | .proj _ _ s      => return e.updateProj! (← instantiateExprMVars s)
-    | .forallE _ d b _ => return e.updateForallE! (← instantiateExprMVars d) (← instantiateExprMVars b)
-    | .lam _ d b _     => return e.updateLambdaE! (← instantiateExprMVars d) (← instantiateExprMVars b)
-    | .letE _ t v b _  => return e.updateLet! (← instantiateExprMVars t) (← instantiateExprMVars v) (← instantiateExprMVars b)
-    | .const _ lvls    => return e.updateConst! (← lvls.mapM instantiateLevelMVars)
-    | .sort lvl        => return e.updateSort! (← instantiateLevelMVars lvl)
-    | .mdata _ b       => return e.updateMData! (← instantiateExprMVars b)
-    | .app ..          => e.withApp fun f args => do
-      let instArgs (f : Expr) : MonadCacheT ExprStructEq Expr m Expr := do
-        let args ← args.mapM instantiateExprMVars
-        pure (mkAppN f args)
-      let instApp : MonadCacheT ExprStructEq Expr m Expr := do
-        let wasMVar := f.isMVar
-        let f ← instantiateExprMVars f
-        if wasMVar && f.isLambda then
-          /- Some of the arguments in args are irrelevant after we beta reduce. -/
-          instantiateExprMVars (f.betaRev args.reverse)
-        else
-          instArgs f
-      match f with
-      | .mvar mvarId =>
-        match (← getDelayedMVarAssignment? mvarId) with
-        | none => instApp
-        | some { fvars, mvarIdPending } =>
-          /-
-             Apply "delayed substitution" (i.e., delayed assignment + application).
-             That is, `f` is some metavariable `?m`, that is delayed assigned to `val`.
-             If after instantiating `val`, we obtain `newVal`, and `newVal` does not contain
-             metavariables, we replace the free variables `fvars` in `newVal` with the first
-             `fvars.size` elements of `args`. -/
-          if fvars.size > args.size then
-            /- We don't have sufficient arguments for instantiating the free variables `fvars`.
-               This can only happen if a tactic or elaboration function is not implemented correctly.
-               We decided to not use `panic!` here and report it as an error in the frontend
-               when we are checking for unassigned metavariables in an elaborated term. -/
-            instArgs f
-          else
-            let newVal ← instantiateExprMVars (mkMVar mvarIdPending)
-            if newVal.hasExprMVar then
-              instArgs f
-            else do
-              let args ← args.mapM instantiateExprMVars
-              /-
-                 Example: suppose we have
-                   `?m t1 t2 t3`
-                 That is, `f := ?m` and `args := #[t1, t2, t3]`
-                 Moreover, `?m` is delayed assigned
-                   `?m #[x, y] := f x y`
-                 where, `fvars := #[x, y]` and `newVal := f x y`.
-                 After abstracting `newVal`, we have `f (Expr.bvar 0) (Expr.bvar 1)`.
-                 After `instantiaterRevRange 0 2 args`, we have `f t1 t2`.
-                 After `mkAppRange 2 3`, we have `f t1 t2 t3` -/
-              let newVal := newVal.abstract fvars
-              let result := newVal.instantiateRevRange 0 fvars.size args
-              let result := mkAppRange result fvars.size args.size args
-              pure result
-      | _ => instApp
-    | e@(.mvar mvarId) => checkCache { val := e : ExprStructEq } fun _ => do
-      match (← getExprMVarAssignment? mvarId) with
-      | some newE => do
-        let newE' ← instantiateExprMVars newE
-        mvarId.assign newE'
-        pure newE'
-      | none => pure e
-    | e => pure e
+def instantiateExprMVars [Monad m] [MonadMCtx m] (e : Expr) : m Expr := do
+  let (mctx, eNew) := instantiateExprMVarsImp (← getMCtx) e
+  setMCtx mctx
+  return eNew
 
 instance : MonadMCtx (StateRefT MetavarContext (ST ω)) where
   getMCtx    := get
@@ -593,6 +565,22 @@ def instantiateMVarsCore (mctx : MetavarContext) (e : Expr) : Expr × MetavarCon
     instantiateExprMVars e
   runST fun _ => instantiate e |>.run |>.run mctx
 
+/-
+Substitutes assigned metavariables in `e` with their assigned value according to the
+`MetavarContext`, recursively.
+
+Example:
+```
+run_meta do
+  let mvar1 ← mkFreshExprMVar (mkConst `Nat)
+  let e := (mkConst `Nat.succ).app mvar1
+  -- e is `Nat.succ ?m.773`, `?m.773` is unassigned
+  mvar1.mvarId!.assign (mkNatLit 42)
+  -- e is `Nat.succ ?m.773`, `?m.773` is assigned to `42`
+  let e' ← instantiateMVars e
+  -- e' is `Nat.succ 42`, `?m.773` is assigned to `42`
+```
+-/
 def instantiateMVars [Monad m] [MonadMCtx m] (e : Expr) : m Expr := do
   if !e.hasMVar then
     return e
@@ -616,6 +604,7 @@ def instantiateMVarDeclMVars [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Unit 
   let mvarDecl     := (← getMCtx).getDecl mvarId
   let lctx ← instantiateLCtxMVars mvarDecl.lctx
   let type ← instantiateMVars mvarDecl.type
+  let (lctx, type) := ShareCommon.shareCommon' (lctx, type)
   modifyMCtx fun mctx => { mctx with decls := mctx.decls.insert mvarId { mvarDecl with lctx, type } }
 
 def instantiateLocalDeclMVars [Monad m] [MonadMCtx m] (localDecl : LocalDecl) : m LocalDecl := do
@@ -754,8 +743,6 @@ def localDeclDependsOnPred [Monad m] [MonadMCtx m] (localDecl : LocalDecl) (pf :
 
 namespace MetavarContext
 
-instance : Inhabited MetavarContext := ⟨{}⟩
-
 @[export lean_mk_metavar_ctx]
 def mkMetavarContext : Unit → MetavarContext := fun _ => {}
 
@@ -799,6 +786,20 @@ def findDecl? (mctx : MetavarContext) (mvarId : MVarId) : Option MetavarDecl :=
 def findUserName? (mctx : MetavarContext) (userName : Name) : Option MVarId :=
   mctx.userNames.find? userName
 
+/--
+Modify the declaration of a metavariable. If the metavariable is not declared,
+the `MetavarContext` is returned unchanged.
+
+You must ensure that the modification is legal. In particular, expressions may
+only be replaced with defeq expressions.
+-/
+def modifyExprMVarDecl (mctx : MetavarContext) (mvarId : MVarId)
+    (f : MetavarDecl → MetavarDecl) : MetavarContext :=
+  if let some mdecl := mctx.decls.find? mvarId then
+    { mctx with decls := mctx.decls.insert mvarId (f mdecl) }
+  else
+    mctx
+
 def setMVarKind (mctx : MetavarContext) (mvarId : MVarId) (kind : MetavarKind) : MetavarContext :=
   let decl := mctx.getDecl mvarId
   { mctx with decls := mctx.decls.insert mvarId { decl with kind := kind } }
@@ -829,6 +830,35 @@ def setMVarUserNameTemporarily (mctx : MetavarContext) (mvarId : MVarId) (userNa
 def setMVarType (mctx : MetavarContext) (mvarId : MVarId) (type : Expr) : MetavarContext :=
   let decl := mctx.getDecl mvarId
   { mctx with decls := mctx.decls.insert mvarId { decl with type := type } }
+
+/--
+Modify the local context of a metavariable. If the metavariable is not declared,
+the `MetavarContext` is returned unchanged.
+
+You must ensure that the modification is legal. In particular, expressions may
+only be replaced with defeq expressions.
+-/
+def modifyExprMVarLCtx (mctx : MetavarContext) (mvarId : MVarId)
+    (f : LocalContext → LocalContext) : MetavarContext :=
+  mctx.modifyExprMVarDecl mvarId fun mdecl => { mdecl with lctx := f mdecl.lctx }
+
+/--
+Set the kind of an fvar. If the given metavariable is not declared or the
+given fvar doesn't exist in its context, the `MetavarContext` is returned
+unchanged.
+-/
+def setFVarKind (mctx : MetavarContext) (mvarId : MVarId) (fvarId : FVarId)
+    (kind : LocalDeclKind) : MetavarContext :=
+  mctx.modifyExprMVarLCtx mvarId (·.setKind fvarId kind)
+
+/--
+Set the `BinderInfo` of an fvar. If the given metavariable is not declared or
+the given fvar doesn't exist in its context, the `MetavarContext` is returned
+unchanged.
+-/
+def setFVarBinderInfo (mctx : MetavarContext) (mvarId : MVarId)
+    (fvarId : FVarId) (bi : BinderInfo) : MetavarContext :=
+  mctx.modifyExprMVarLCtx mvarId (·.setBinderInfo fvarId bi)
 
 def findLevelDepth? (mctx : MetavarContext) (mvarId : LMVarId) : Option Nat :=
   mctx.lDepth.find? mvarId
@@ -875,7 +905,7 @@ structure State where
   mctx           : MetavarContext
   nextMacroScope : MacroScope
   ngen           : NameGenerator
-  cache          : HashMap ExprStructEq Expr := {}
+  cache          : Std.HashMap ExprStructEq Expr := {}
 
 structure Context where
   mainModule         : Name
@@ -923,7 +953,8 @@ private def getLocalDeclWithSmallestIdx (lctx : LocalContext) (xs : Array Expr) 
   Remark: We used to throw an `Exception.revertFailure` exception when an auxiliary declaration
   had to be reversed. Recall that auxiliary declarations are created when compiling (mutually)
   recursive definitions. The `revertFailure` due to auxiliary declaration dependency was originally
-  introduced in Lean3 to address issue https://github.com/leanprover/lean/issues/1258.
+  introduced in Lean3 to address issue <https://github.com/leanprover/lean/issues/1258>.
+
   In Lean4, this solution is not satisfactory because all definitions/theorems are potentially
   recursive. So, even a simple (incomplete) definition such as
   ```
@@ -939,11 +970,13 @@ private def getLocalDeclWithSmallestIdx (lctx : LocalContext) (xs : Array Expr) 
   we create the metavariable `?n : {α : Type} → (a : α) → (f : α → List α) → List α`,
   add the delayed assignment `?n #[α, a, f] := ?m`, and create the lambda
   `fun {α : Type} (a : α) => ?n α a f`.
+
   See `elimMVarDeps` for more information.
+
   If we kept using the Lean3 approach, we would get the `Exception.revertFailure` exception because we are
   reverting the auxiliary definition `f`.
 
-  Note that https://github.com/leanprover/lean/issues/1258 is not an issue in Lean4 because
+  Note that <https://github.com/leanprover/lean/issues/1258> is not an issue in Lean4 because
   we have changed how we compile recursive definitions.
 -/
 def collectForwardDeps (lctx : LocalContext) (toRevert : Array Expr) : M (Array Expr) := do
@@ -1174,13 +1207,25 @@ partial def revert (xs : Array Expr) (mvarId : MVarId) : M (Expr × Array Expr) 
   let e ← elimMVarDeps xs e
   pure (e.abstractRange i xs)
 
+private def mkLambda' (x : Name) (bi : BinderInfo) (t : Expr) (b : Expr) (etaReduce : Bool) : Expr :=
+  if etaReduce then
+    match b with
+    | .app f (.bvar 0) =>
+      if !f.hasLooseBVar 0 then
+        f.lowerLooseBVars 1 1
+      else
+        mkLambda x bi t b
+    | _ => mkLambda x bi t b
+  else
+    mkLambda x bi t b
+
 /--
   Similar to `LocalContext.mkBinding`, but handles metavariables correctly.
   If `usedOnly == true` then `forall` and `lambda` expressions are created only for used variables.
   If `usedLetOnly == true` then `let` expressions are created only for used (let-) variables. -/
-@[specialize] def mkBinding (isLambda : Bool) (lctx : LocalContext) (xs : Array Expr) (e : Expr) (usedOnly : Bool) (usedLetOnly : Bool) : M (Expr × Nat) := do
+@[specialize] def mkBinding (isLambda : Bool) (lctx : LocalContext) (xs : Array Expr) (e : Expr) (usedOnly : Bool) (usedLetOnly : Bool) (etaReduce : Bool) : M Expr := do
   let e ← abstractRange xs xs.size e
-  xs.size.foldRevM (init := (e, 0)) fun i (e, num) => do
+  xs.size.foldRevM (init := e) fun i e => do
       let x := xs[i]!
       if x.isFVar then
         match lctx.getFVar! x with
@@ -1189,27 +1234,27 @@ partial def revert (xs : Array Expr) (mvarId : MVarId) : M (Expr × Array Expr) 
             let type := type.headBeta;
             let type ← abstractRange xs i type
             if isLambda then
-              return (Lean.mkLambda n bi type e, num + 1)
+              return mkLambda' n bi type e etaReduce
             else
-              return (Lean.mkForall n bi type e, num + 1)
+              return Lean.mkForall n bi type e
           else
-            return (e.lowerLooseBVars 1 1, num)
+            return e.lowerLooseBVars 1 1
         | LocalDecl.ldecl _ _ n type value nonDep _ =>
           if !usedLetOnly || e.hasLooseBVar 0 then
             let type  ← abstractRange xs i type
             let value ← abstractRange xs i value
-            return (mkLet n type value e nonDep, num + 1)
+            return mkLet n type value e nonDep
           else
-            return (e.lowerLooseBVars 1 1, num)
+            return e.lowerLooseBVars 1 1
       else
         let mvarDecl := (← get).mctx.getDecl x.mvarId!
         let type := mvarDecl.type.headBeta
         let type ← abstractRange xs i type
         let id ← if mvarDecl.userName.isAnonymous then mkFreshBinderName else pure mvarDecl.userName
         if isLambda then
-          return (Lean.mkLambda id (← read).binderInfoForMVars type e, num + 1)
+          return mkLambda' id (← read).binderInfoForMVars type e etaReduce
         else
-          return (Lean.mkForall id (← read).binderInfoForMVars type e, num + 1)
+          return Lean.mkForall id (← read).binderInfoForMVars type e
 
 end MkBinding
 
@@ -1225,15 +1270,15 @@ def elimMVarDeps (xs : Array Expr) (e : Expr) (preserveOrder : Bool) : MkBinding
 def revert (xs : Array Expr) (mvarId : MVarId) (preserveOrder : Bool) : MkBindingM (Expr × Array Expr) := fun ctx =>
   MkBinding.revert xs mvarId { preserveOrder, mainModule := ctx.mainModule }
 
-def mkBinding (isLambda : Bool) (xs : Array Expr) (e : Expr) (usedOnly : Bool := false) (usedLetOnly : Bool := true) (binderInfoForMVars := BinderInfo.implicit) : MkBindingM (Expr × Nat) := fun ctx =>
+def mkBinding (isLambda : Bool) (xs : Array Expr) (e : Expr) (usedOnly : Bool := false) (usedLetOnly : Bool := true) (etaReduce := false) (binderInfoForMVars := BinderInfo.implicit) : MkBindingM Expr := fun ctx =>
   let mvarIdsToAbstract := xs.foldl (init := {}) fun s x => if x.isMVar then s.insert x.mvarId! else s
-  MkBinding.mkBinding isLambda ctx.lctx xs e usedOnly usedLetOnly { preserveOrder := false, binderInfoForMVars, mvarIdsToAbstract, mainModule := ctx.mainModule }
+  MkBinding.mkBinding isLambda ctx.lctx xs e usedOnly usedLetOnly etaReduce { preserveOrder := false, binderInfoForMVars, mvarIdsToAbstract, mainModule := ctx.mainModule }
 
-@[inline] def mkLambda (xs : Array Expr) (e : Expr) (usedOnly : Bool := false) (usedLetOnly : Bool := true) (binderInfoForMVars := BinderInfo.implicit) : MkBindingM Expr :=
-  return (← mkBinding (isLambda := true) xs e usedOnly usedLetOnly binderInfoForMVars).1
+@[inline] def mkLambda (xs : Array Expr) (e : Expr) (usedOnly : Bool := false) (usedLetOnly : Bool := true) (etaReduce := false) (binderInfoForMVars := BinderInfo.implicit) : MkBindingM Expr :=
+  return ← mkBinding (isLambda := true) xs e usedOnly usedLetOnly etaReduce binderInfoForMVars
 
 @[inline] def mkForall (xs : Array Expr) (e : Expr) (usedOnly : Bool := false) (usedLetOnly : Bool := true) (binderInfoForMVars := BinderInfo.implicit) : MkBindingM Expr :=
-  return (← mkBinding (isLambda := false) xs e usedOnly usedLetOnly binderInfoForMVars).1
+  return ← mkBinding (isLambda := false) xs e usedOnly usedLetOnly false binderInfoForMVars
 
 @[inline] def abstractRange (e : Expr) (n : Nat) (xs : Array Expr) : MkBindingM Expr := fun ctx =>
   MkBinding.abstractRange xs n e { preserveOrder := false, mainModule := ctx.mainModule }
@@ -1276,7 +1321,7 @@ structure State where
   mctx         : MetavarContext
   paramNames   : Array Name := #[]
   nextParamIdx : Nat
-  cache        : HashMap ExprStructEq Expr := {}
+  cache        : Std.HashMap ExprStructEq Expr := {}
 
 abbrev M := ReaderT Context <| StateM State
 
@@ -1285,7 +1330,7 @@ instance : MonadMCtx M where
   modifyMCtx f := modify fun s => { s with mctx := f s.mctx }
 
 instance : MonadCache ExprStructEq Expr M where
-  findCached? e   := return (← get).cache.find? e
+  findCached? e   := return (← get).cache[e]?
   cache       e v := modify fun s => { s with cache := s.cache.insert e v }
 
 partial def mkParamName : M Name := do
@@ -1363,5 +1408,47 @@ def getExprAssignmentDomain (mctx : MetavarContext) : Array MVarId :=
   mctx.eAssignment.foldl (init := #[]) fun a mvarId _ => Array.push a mvarId
 
 end MetavarContext
+
+namespace MVarId
+
+/--
+Modify the declaration of a metavariable. If the metavariable is not declared,
+nothing happens.
+
+You must ensure that the modification is legal. In particular, expressions may
+only be replaced with defeq expressions.
+-/
+def modifyDecl [MonadMCtx m] (mvarId : MVarId)
+    (f : MetavarDecl → MetavarDecl) : m Unit :=
+  modifyMCtx (·.modifyExprMVarDecl mvarId f)
+
+/--
+Modify the local context of a metavariable. If the metavariable is not declared,
+nothing happens.
+
+You must ensure that the modification is legal. In particular, expressions may
+only be replaced with defeq expressions.
+-/
+def modifyLCtx [MonadMCtx m] (mvarId : MVarId)
+    (f : LocalContext → LocalContext) : m Unit :=
+  modifyMCtx (·.modifyExprMVarLCtx mvarId f)
+
+/--
+Set the kind of an fvar. If the given metavariable is not declared or the
+given fvar doesn't exist in its context, nothing happens.
+-/
+def setFVarKind [MonadMCtx m] (mvarId : MVarId) (fvarId : FVarId)
+    (kind : LocalDeclKind) : m Unit :=
+  modifyMCtx (·.setFVarKind mvarId fvarId kind)
+
+/--
+Set the `BinderInfo` of an fvar. If the given metavariable is not declared or
+the given fvar doesn't exist in its context, nothing happens.
+-/
+def setFVarBinderInfo [MonadMCtx m] (mvarId : MVarId) (fvarId : FVarId)
+    (bi : BinderInfo) : m Unit :=
+  modifyMCtx (·.setFVarBinderInfo mvarId fvarId bi)
+
+end MVarId
 
 end Lean

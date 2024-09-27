@@ -3,6 +3,7 @@ Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Meta.Match.MatchPatternAttr
 import Lean.Elab.Arg
 import Lean.Elab.MatchAltView
@@ -46,8 +47,51 @@ structure State where
 
 abbrev M := StateRefT State TermElabM
 
-private def throwCtorExpected {α} : M α :=
-  throwError "invalid pattern, constructor or constant marked with '[match_pattern]' expected"
+private def throwCtorExpected {α} (ident : Option Syntax) : M α := do
+  let message : MessageData :=
+    "invalid pattern, constructor or constant marked with '[match_pattern]' expected"
+  let some idStx := ident | throwError message
+  let name := idStx.getId
+  if let .anonymous := name then throwError message
+  let env ← getEnv
+  let mut candidates : Array Name := #[]
+  for (c, _) in env.constants do
+    if isPrivateName c then continue
+    if !(name.isSuffixOf c) then continue
+    if env.isConstructor c || hasMatchPatternAttribute env c then
+      candidates := candidates.push c
+
+  if candidates.size = 0 then
+    throwError message
+  else if h : candidates.size = 1 then
+    throwError message ++ m!"\n\nSuggestion: '{candidates[0]}' is similar"
+  else
+    let sorted := candidates.qsort (·.toString < ·.toString)
+    let diff :=
+      if candidates.size > 10 then [m!" (or {candidates.size - 10} others)"]
+      else []
+    let suggestions : MessageData := .group <|
+      .joinSep ((sorted.extract 0 10 |>.toList |>.map (showName env)) ++ diff)
+        ("," ++ Format.line)
+    throwError message ++ .group ("\n\nSuggestions:" ++ .nestD (Format.line ++ suggestions))
+where
+  -- Create some `MessageData` for a name that shows it without an `@`, but with the metadata that
+  -- makes infoview hovers and the like work. This technique only works because the names are known
+  -- to be global constants, so we don't need the local context.
+  showName (env : Environment) (n : Name) : MessageData :=
+      let params :=
+        env.constants.find?' n |>.map (·.levelParams.map Level.param) |>.getD []
+      .ofFormatWithInfos {
+        fmt := "'" ++ .tag 0 (format n) ++ "'",
+        infos :=
+          .fromList [(0, .ofTermInfo {
+            lctx := .empty,
+            expr := .const n params,
+            stx := .ident .none (toString n).toSubstring n [.decl n []],
+            elaborator := `Delab,
+            expectedType? := none
+          })] _
+      }
 
 private def throwInvalidPattern {α} : M α :=
   throwError "invalid pattern"
@@ -112,9 +156,11 @@ private def processVar (idStx : Syntax) : M Syntax := do
   modify fun s => { s with vars := s.vars.push idStx, found := s.found.insert id }
   return idStx
 
-private def samePatternsVariables (startingAt : Nat) (s₁ s₂ : State) : Bool :=
-  if h : s₁.vars.size = s₂.vars.size then
-    Array.isEqvAux s₁.vars s₂.vars h (.==.) startingAt
+private def samePatternsVariables (startingAt : Nat) (s₁ s₂ : State) : Bool := Id.run do
+  if h₁ : s₁.vars.size = s₂.vars.size then
+    for h₂ : i in [startingAt:s₁.vars.size] do
+      if s₁.vars[i] != s₂.vars[i]'(by obtain ⟨_, y⟩ := h₂; simp_all) then return false
+    true
   else
     false
 
@@ -146,7 +192,6 @@ partial def collect (stx : Syntax) : M Syntax := withRef stx <| withFreshMacroSc
       ```
       def namedPattern := check... >> trailing_parser "@" >> optional (atomic (ident >> ":")) >> termParser
       ```
-      TODO: pattern variable for equality proof
      -/
     let id := stx[0]
     discard <| processVar id
@@ -159,6 +204,19 @@ partial def collect (stx : Syntax) : M Syntax := withRef stx <| withFreshMacroSc
     discard <| processVar h
     ``(_root_.namedPattern $id $pat $h)
   else if k == ``Lean.Parser.Term.binop then
+    /-
+    We support `binop%` syntax in patterns because we
+    wanted to support `x+1` in patterns.
+    Recall that the `binop%` syntax was added to improve elaboration of some binary operators: `+` is one of them.
+    Recall that `HAdd.hAdd` is marked as `[match_pattern]`
+    TODO for a distant future: make this whole procedure extensible.
+    -/
+    -- Check whether the `binop%` operator is marked with `[match_pattern]`,
+    -- We must check that otherwise Lean will accept operators that are not tagged with this annotation.
+    let some (.const fName _) ← resolveId? stx[1] "pattern"
+      | throwCtorExpected none
+    unless hasMatchPatternAttribute (← getEnv) fName do
+      throwCtorExpected none
     let lhs ← collect stx[2]
     let rhs ← collect stx[3]
     return stx.setArg 2 lhs |>.setArg 3 rhs
@@ -242,7 +300,7 @@ where
             processCtor stx
           else
             processVar stx
-        | none => throwCtorExpected
+        | none => throwCtorExpected (some stx)
       | _ => processVar stx
 
   pushNewArg (accessible : Bool) (ctx : Context) (arg : Arg) : M Context := do
@@ -294,7 +352,7 @@ where
       | `($fId:ident)  => pure (fId, false)
       | `(@$fId:ident) => pure (fId, true)
       | _              => throwError "identifier expected"
-    let some (Expr.const fName _) ← resolveId? fId "pattern" (withInfo := true) | throwCtorExpected
+    let some (Expr.const fName _) ← resolveId? fId "pattern" (withInfo := true) | throwCtorExpected (some fId)
     let fInfo ← getConstInfo fName
     let paramDecls ← forallTelescopeReducing fInfo.type fun xs _ => xs.mapM fun x => do
       let d ← getFVarLocalDecl x
@@ -308,7 +366,7 @@ where
         processCtorAppContext
           { funId := fId, explicit := explicit, ctorVal? := none, paramDecls := paramDecls, namedArgs := namedArgs, args := args, ellipsis := ellipsis }
       else
-        throwCtorExpected
+        throwCtorExpected (some fId)
 
 def main (alt : MatchAltView) : M MatchAltView := do
   let patterns ← alt.patterns.mapM fun p => do

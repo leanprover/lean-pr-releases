@@ -1,3 +1,9 @@
+/-
+Copyright (c) 2022 Lars König. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Lars König
+-/
+prelude
 import Lean.Data.Options
 import Lean.Server.InfoUtils
 import Lean.Linter.Basic
@@ -5,16 +11,6 @@ import Lean.Linter.Basic
 namespace Lean.Linter
 
 open Lean.Elab
-
-def logLint [Monad m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
-    (linterOption : Lean.Option Bool) (stx : Syntax) (msg : MessageData) : m Unit :=
-  logWarningAt stx (.tagged linterOption.name m!"{msg} [{linterOption.name}]")
-
-/-- If `linterOption` is true, print a linter warning message at the position determined by `stx`.
--/
-def logLintIf [Monad m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
-    (linterOption : Lean.Option Bool) (stx : Syntax) (msg : MessageData) : m Unit := do
-  if linterOption.get (← getOptions) then logLint linterOption stx msg
 
 /-- Go upwards through the given `tree` starting from the smallest node that
 contains the given `range` and collect all `MacroExpansionInfo`s on the way up.

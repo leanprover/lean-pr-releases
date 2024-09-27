@@ -7,7 +7,7 @@ Additional goodies for writing macros
 -/
 prelude
 import Init.MetaTypes
-import Init.Data.Array.Basic
+import Init.Data.Array.GetLit
 import Init.Data.Option.BasicAux
 
 namespace Lean
@@ -75,7 +75,7 @@ See #2572.
 opaque Internal.hasLLVMBackend (u : Unit) : Bool
 
 /-- Valid identifier names -/
-def isGreek (c : Char) : Bool :=
+@[inline] def isGreek (c : Char) : Bool :=
   0x391 ≤ c.val && c.val ≤ 0x3dd
 
 def isLetterLike (c : Char) : Bool :=
@@ -86,7 +86,7 @@ def isLetterLike (c : Char) : Bool :=
   (0x2100 ≤ c.val && c.val ≤ 0x214f) ||                                  -- Letter like block
   (0x1d49c ≤ c.val && c.val ≤ 0x1d59f)                                   -- Latin letters, Script, Double-struck, Fractur
 
-def isNumericSubscript (c : Char) : Bool :=
+@[inline] def isNumericSubscript (c : Char) : Bool :=
   0x2080 ≤ c.val && c.val ≤ 0x2089
 
 def isSubScriptAlnum (c : Char) : Bool :=
@@ -94,17 +94,16 @@ def isSubScriptAlnum (c : Char) : Bool :=
   (0x2090 ≤ c.val && c.val ≤ 0x209c) ||
   (0x1d62 ≤ c.val && c.val ≤ 0x1d6a)
 
-def isIdFirst (c : Char) : Bool :=
+@[inline] def isIdFirst (c : Char) : Bool :=
   c.isAlpha || c = '_' || isLetterLike c
 
-def isIdRest (c : Char) : Bool :=
+@[inline] def isIdRest (c : Char) : Bool :=
   c.isAlphanum || c = '_' || c = '\'' || c == '!' || c == '?' || isLetterLike c || isSubScriptAlnum c
 
 def idBeginEscape := '«'
 def idEndEscape   := '»'
-def isIdBeginEscape (c : Char) : Bool := c = idBeginEscape
-def isIdEndEscape (c : Char) : Bool := c = idEndEscape
-
+@[inline] def isIdBeginEscape (c : Char) : Bool := c = idBeginEscape
+@[inline] def isIdEndEscape (c : Char) : Bool := c = idEndEscape
 namespace Name
 
 def getRoot : Name → Name
@@ -120,28 +119,55 @@ def isInaccessibleUserName : Name → Bool
   | Name.num p _   => isInaccessibleUserName p
   | _              => false
 
-def escapePart (s : String) : Option String :=
-  if s.length > 0 && isIdFirst (s.get 0) && (s.toSubstring.drop 1).all isIdRest then s
+/--
+Creates a round-trippable string name component if possible, otherwise returns `none`.
+Names that are valid identifiers are not escaped, and otherwise, if they do not contain `»`, they are escaped.
+- If `force` is `true`, then even valid identifiers are escaped.
+-/
+def escapePart (s : String) (force : Bool := false) : Option String :=
+  if s.length > 0 && !force && isIdFirst (s.get 0) && (s.toSubstring.drop 1).all isIdRest then s
   else if s.any isIdEndEscape then none
   else some <| idBeginEscape.toString ++ s ++ idEndEscape.toString
 
--- NOTE: does not roundtrip even with `escape = true` if name is anonymous or contains numeric part or `idEndEscape`
-variable (sep : String) (escape : Bool)
-def toStringWithSep : Name → String
+variable (sep : String) (escape : Bool) in
+/--
+Uses the separator `sep` (usually `"."`) to combine the components of the `Name` into a string.
+See the documentation for `Name.toString` for an explanation of `escape` and `isToken`.
+-/
+def toStringWithSep (n : Name) (isToken : String → Bool := fun _ => false) : String :=
+  match n with
   | anonymous       => "[anonymous]"
-  | str anonymous s => maybeEscape s
+  | str anonymous s => maybeEscape s (isToken s)
   | num anonymous v => toString v
-  | str n s         => toStringWithSep n ++ sep ++ maybeEscape s
-  | num n v         => toStringWithSep n ++ sep ++ Nat.repr v
+  | str n s         =>
+    -- Escape the last component if the identifier would otherwise be a token
+    let r := toStringWithSep n isToken
+    let r' := r ++ sep ++ maybeEscape s false
+    if escape && isToken r' then r ++ sep ++ maybeEscape s true else r'
+  | num n v         => toStringWithSep n (isToken := fun _ => false) ++ sep ++ Nat.repr v
 where
-  maybeEscape s := if escape then escapePart s |>.getD s else s
+  maybeEscape s force := if escape then escapePart s force |>.getD s else s
 
-protected def toString (n : Name) (escape := true) : String :=
+/--
+Converts a name to a string.
+
+- If `escape` is `true`, then escapes name components using `«` and `»` to ensure that
+  those names that can appear in source files round trip.
+  Names with number components, anonymous names, and names containing `»` might not round trip.
+  Furthermore, "pseudo-syntax" produced by the delaborator, such as `_`, `#0` or `?u`, is not escaped.
+- The optional `isToken` function is used when `escape` is `true` to determine whether more
+  escaping is necessary to avoid parser tokens.
+  The insertion algorithm works so long as parser tokens do not themselves contain `«` or `»`.
+-/
+protected def toString (n : Name) (escape := true) (isToken : String → Bool := fun _ => false) : String :=
   -- never escape "prettified" inaccessible names or macro scopes or pseudo-syntax introduced by the delaborator
-  toStringWithSep "." (escape && !n.isInaccessibleUserName && !n.hasMacroScopes && !maybePseudoSyntax) n
+  toStringWithSep "." (escape && !n.isInaccessibleUserName && !n.hasMacroScopes && !maybePseudoSyntax) n isToken
 where
   maybePseudoSyntax :=
-    if let .str _ s := n.getRoot then
+    if n == `_ then
+      -- output hole as is
+      true
+    else if let .str _ s := n.getRoot then
       -- could be pseudo-syntax for loose bvar or universe mvar, output as is
       "#".isPrefixOf s || "?".isPrefixOf s
     else
@@ -389,9 +415,9 @@ def getSubstring? (stx : Syntax) (withLeading := true) (withTrailing := true) : 
 partial def setTailInfoAux (info : SourceInfo) : Syntax → Option Syntax
   | atom _ val             => some <| atom info val
   | ident _ rawVal val pre => some <| ident info rawVal val pre
-  | node info k args       =>
+  | node info' k args      =>
     match updateLast args (setTailInfoAux info) args.size with
-    | some args => some <| node info k args
+    | some args => some <| node info' k args
     | none      => none
   | _                      => none
 
@@ -400,9 +426,16 @@ def setTailInfo (stx : Syntax) (info : SourceInfo) : Syntax :=
   | some stx => stx
   | none     => stx
 
+/--
+Replaces the trailing whitespace in `stx`, if any, with an empty substring.
+
+The trailing substring's `startPos` and `str` are preserved in order to ensure that the result could
+have been produced by the parser, in case any syntax consumers rely on such an assumption.
+-/
 def unsetTrailing (stx : Syntax) : Syntax :=
   match stx.getTailInfo with
-  | SourceInfo.original lead pos _ endPos => stx.setTailInfo (SourceInfo.original lead pos "".toSubstring endPos)
+  | SourceInfo.original lead pos trail endPos =>
+    stx.setTailInfo (SourceInfo.original lead pos { trail with stopPos := trail.startPos } endPos)
   | _                                     => stx
 
 @[specialize] private partial def updateFirst {α} [Inhabited α] (a : Array α) (f : α → Option α) (i : Nat) : Option (Array α) :=
@@ -563,8 +596,17 @@ def SepArray.ofElemsUsingRef [Monad m] [MonadRef m] {sep} (elems : Array Syntax)
 instance : Coe (Array Syntax) (SepArray sep) where
   coe := SepArray.ofElems
 
+/--
+Constructs a typed separated array from elements.
+The given array does not include the separators.
+
+Like `Syntax.SepArray.ofElems` but for typed syntax.
+-/
+def TSepArray.ofElems {sep} (elems : Array (TSyntax k)) : TSepArray k sep :=
+  .mk (SepArray.ofElems (sep := sep) (TSyntaxArray.raw elems)).1
+
 instance : Coe (TSyntaxArray k) (TSepArray k sep) where
-  coe a := ⟨mkSepArray a.raw (mkAtom sep)⟩
+  coe := TSepArray.ofElems
 
 /-- Create syntax representing a Lean term application, but avoid degenerate empty applications. -/
 def mkApp (fn : Term) : (args : TSyntaxArray `term) → Term
@@ -577,6 +619,9 @@ def mkCApp (fn : Name) (args : TSyntaxArray `term) : Term :=
 def mkLit (kind : SyntaxNodeKind) (val : String) (info := SourceInfo.none) : TSyntax kind :=
   let atom : Syntax := Syntax.atom info val
   mkNode kind #[atom]
+
+def mkCharLit (val : Char) (info := SourceInfo.none) : CharLit :=
+  mkLit charLitKind (Char.quote val) info
 
 def mkStrLit (val : String) (info := SourceInfo.none) : StrLit :=
   mkLit strLitKind (String.quote val) info
@@ -773,6 +818,16 @@ def decodeQuotedChar (s : String) (i : String.Pos) : Option (Char × String.Pos)
   else
     none
 
+/--
+Decodes a valid string gap after the `\`.
+Note that this function matches `"\" whitespace+` rather than
+the more restrictive `"\" newline whitespace*` since this simplifies the implementation.
+Justification: this does not overlap with any other sequences beginning with `\`.
+-/
+def decodeStringGap (s : String) (i : String.Pos) : Option String.Pos := do
+  guard <| (s.get i).isWhitespace
+  s.nextWhile Char.isWhitespace (s.next i)
+
 partial def decodeStrLitAux (s : String) (i : String.Pos) (acc : String) : Option String := do
   let c := s.get i
   let i := s.next i
@@ -781,14 +836,49 @@ partial def decodeStrLitAux (s : String) (i : String.Pos) (acc : String) : Optio
   else if s.atEnd i then
     none
   else if c == '\\' then do
-    let (c, i) ← decodeQuotedChar s i
-    decodeStrLitAux s i (acc.push c)
+    if let some (c, i) := decodeQuotedChar s i then
+      decodeStrLitAux s i (acc.push c)
+    else if let some i := decodeStringGap s i then
+      decodeStrLitAux s i acc
+    else
+      none
   else
     decodeStrLitAux s i (acc.push c)
 
-def decodeStrLit (s : String) : Option String :=
-  decodeStrLitAux s ⟨1⟩ ""
+/--
+Takes a raw string literal, counts the number of `#`'s after the `r`, and interprets it as a string.
+The position `i` should start at `1`, which is the character after the leading `r`.
+The algorithm is simple: we are given `r##...#"...string..."##...#` with zero or more `#`s.
+By counting the number of leading `#`'s, we can extract the `...string...`.
+-/
+partial def decodeRawStrLitAux (s : String) (i : String.Pos) (num : Nat) : String :=
+  let c := s.get i
+  let i := s.next i
+  if c == '#' then
+    decodeRawStrLitAux s i (num + 1)
+  else
+    s.extract i ⟨s.utf8ByteSize - (num + 1)⟩
 
+/--
+Takes the string literal lexical syntax parsed by the parser and interprets it as a string.
+This is where escape sequences are processed for example.
+The string `s` is either a plain string literal or a raw string literal.
+
+If it returns `none` then the string literal is ill-formed, which indicates a bug in the parser.
+The function is not required to return `none` if the string literal is ill-formed.
+-/
+def decodeStrLit (s : String) : Option String :=
+  if s.get 0 == 'r' then
+    decodeRawStrLitAux s ⟨1⟩ 0
+  else
+    decodeStrLitAux s ⟨1⟩ ""
+
+/--
+If the provided `Syntax` is a string literal, returns the string it represents.
+
+Even if the `Syntax` is a `str` node, the function may return `none` if its internally ill-formed.
+The parser should always create well-formed `str` nodes.
+-/
 def isStrLit? (stx : Syntax) : Option String :=
   match isLit? strLitKind stx with
   | some val => decodeStrLit val
@@ -853,6 +943,11 @@ def _root_.Substring.toName (s : Substring) : Name :=
       else
         Name.mkStr n comp
 
+/--
+Converts a `String` to a hierarchical `Name` after splitting it at the dots.
+
+`"a.b".toName` is the name `a.b`, not `«a.b»`. For the latter, use `Name.mkSimple`.
+-/
 def _root_.String.toName (s : String) : Name :=
   s.toSubstring.toName
 
@@ -950,6 +1045,7 @@ instance [Quote α k] [CoeHTCT (TSyntax k) (TSyntax [k'])] : Quote α k' := ⟨f
 
 instance : Quote Term := ⟨id⟩
 instance : Quote Bool := ⟨fun | true => mkCIdent ``Bool.true | false => mkCIdent ``Bool.false⟩
+instance : Quote Char charLitKind := ⟨Syntax.mkCharLit⟩
 instance : Quote String strLitKind := ⟨Syntax.mkStrLit⟩
 instance : Quote Nat numLitKind := ⟨fun n => Syntax.mkNumLit <| toString n⟩
 instance : Quote Substring := ⟨fun s => Syntax.mkCApp ``String.toSubstring' #[quote s.toString]⟩
@@ -994,7 +1090,8 @@ where
       go (i+1) (args.push (quote xs[i]))
     else
       Syntax.mkCApp (Name.mkStr2 "Array" ("mkArray" ++ toString xs.size)) args
-termination_by go i _ => xs.size - i
+  termination_by xs.size - i
+  decreasing_by decreasing_trivial_pre_omega
 
 instance [Quote α `term] : Quote (Array α) `term where
   quote := quoteArray
@@ -1132,14 +1229,6 @@ instance : Coe (Lean.Term) (Lean.TSyntax `Lean.Parser.Term.funBinder) where
 
 end Lean.Syntax
 
-set_option linter.unusedVariables.funArgs false in
-/--
-  Gadget for automatic parameter support. This is similar to the `optParam` gadget, but it uses
-  the given tactic.
-  Like `optParam`, this gadget only affects elaboration.
-  For example, the tactic will *not* be invoked during type class resolution. -/
-abbrev autoParam.{u} (α : Sort u) (tactic : Lean.Syntax) : Sort u := α
-
 /-! # Helper functions for manipulating interpolated strings -/
 
 namespace Lean.Syntax
@@ -1162,8 +1251,12 @@ private partial def decodeInterpStrLit (s : String) : Option String :=
     else if s.atEnd i then
       none
     else if c == '\\' then do
-      let (c, i) ← decodeInterpStrQuotedChar s i
-      loop i (acc.push c)
+      if let some (c, i) := decodeInterpStrQuotedChar s i then
+        loop i (acc.push c)
+      else if let some i := decodeStringGap s i then
+        loop i acc
+      else
+        none
     else
       loop i (acc.push c)
   loop ⟨1⟩ ""
@@ -1199,6 +1292,11 @@ def expandInterpolatedStr (interpStr : TSyntax interpolatedStrKind) (type : Term
   let r ← expandInterpolatedStrChunks interpStr.raw.getArgs (fun a b => `($a ++ $b)) (fun a => `($toTypeFn $a))
   `(($r : $type))
 
+def getDocString (stx : TSyntax `Lean.Parser.Command.docComment) : String :=
+  match stx.raw[1] with
+  | Syntax.atom _ val => val.extract 0 (val.endPos - ⟨2⟩)
+  | _                 => ""
+
 end TSyntax
 
 namespace Meta
@@ -1214,18 +1312,102 @@ def Occurrences.isAll : Occurrences → Bool
   | all => true
   | _   => false
 
+/--
+Controls which new mvars are turned in to goals by the `apply` tactic.
+- `nonDependentFirst`  mvars that don't depend on other goals appear first in the goal list.
+- `nonDependentOnly` only mvars that don't depend on other goals are added to goal list.
+- `all` all unassigned mvars are added to the goal list.
+-/
+-- TODO: Consider renaming to `Apply.NewGoals`
+inductive ApplyNewGoals where
+  | nonDependentFirst | nonDependentOnly | all
+
+/-- Configures the behaviour of the `apply` tactic. -/
+-- TODO: Consider renaming to `Apply.Config`
+structure ApplyConfig where
+  newGoals := ApplyNewGoals.nonDependentFirst
+  /--
+  If `synthAssignedInstances` is `true`, then `apply` will synthesize instance implicit arguments
+  even if they have assigned by `isDefEq`, and then check whether the synthesized value matches the
+  one inferred. The `congr` tactic sets this flag to false.
+  -/
+  synthAssignedInstances := true
+  /--
+  If `allowSynthFailures` is `true`, then `apply` will return instance implicit arguments
+  for which typeclass search failed as new goals.
+  -/
+  allowSynthFailures := false
+  /--
+  If `approx := true`, then we turn on `isDefEq` approximations. That is, we use
+  the `approxDefEq` combinator.
+  -/
+  approx : Bool := true
+
 namespace Rewrite
 
+abbrev NewGoals := ApplyNewGoals
+
 structure Config where
-  transparency : TransparencyMode := TransparencyMode.reducible
+  transparency : TransparencyMode := .reducible
   offsetCnstrs : Bool := true
-  occs : Occurrences := Occurrences.all
+  occs : Occurrences := .all
+  newGoals : NewGoals := .nonDependentFirst
 
 end Rewrite
 
+namespace Omega
+
+/-- Configures the behaviour of the `omega` tactic. -/
+structure OmegaConfig where
+  /--
+  Split disjunctions in the context.
+
+  Note that with `splitDisjunctions := false` omega will not be able to solve `x = y` goals
+  as these are usually handled by introducing `¬ x = y` as a hypothesis, then replacing this with
+  `x < y ∨ x > y`.
+
+  On the other hand, `omega` does not currently detect disjunctions which, when split,
+  introduce no new useful information, so the presence of irrelevant disjunctions in the context
+  can significantly increase run time.
+  -/
+  splitDisjunctions : Bool := true
+  /--
+  Whenever `((a - b : Nat) : Int)` is found, register the disjunction
+  `b ≤ a ∧ ((a - b : Nat) : Int) = a - b ∨ a < b ∧ ((a - b : Nat) : Int) = 0`
+  for later splitting.
+  -/
+  splitNatSub : Bool := true
+  /--
+  Whenever `Int.natAbs a` is found, register the disjunction
+  `0 ≤ a ∧ Int.natAbs a = a ∨ a < 0 ∧ Int.natAbs a = - a` for later splitting.
+  -/
+  splitNatAbs : Bool := true
+  /--
+  Whenever `min a b` or `max a b` is found, rewrite in terms of the definition
+  `if a ≤ b ...`, for later case splitting.
+  -/
+  splitMinMax : Bool := true
+
+end Omega
+
+namespace CheckTactic
+
+/--
+Type used to lift an arbitrary value into a type parameter so it can
+appear in a proof goal.
+
+It is used by the #check_tactic command.
+-/
+inductive CheckGoalType {α : Sort u} : (val : α) → Prop where
+| intro : (val : α) → CheckGoalType val
+
+end CheckTactic
+
 end Meta
 
-namespace Parser.Tactic
+namespace Parser
+
+namespace Tactic
 
 /-- `erw [rules]` is a shorthand for `rw (config := { transparency := .default }) [rules]`.
 This does rewriting up to unfolding of regular definitions (by comparison to regular `rw`
@@ -1286,6 +1468,8 @@ This will rewrite with all equation lemmas, which can be used to
 partially evaluate many definitions. -/
 declare_simp_like_tactic (dsimp := true) dsimpAutoUnfold "dsimp! " fun (c : Lean.Meta.DSimp.Config) => { c with autoUnfold := true }
 
-end Parser.Tactic
+end Tactic
+
+end Parser
 
 end Lean

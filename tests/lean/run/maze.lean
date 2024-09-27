@@ -100,8 +100,8 @@ def extractXY : Lean.Expr → Lean.MetaM Coords
   let sizeArgs := Lean.Expr.getAppArgs e'
   let x ← Lean.Meta.whnf sizeArgs[0]!
   let y ← Lean.Meta.whnf sizeArgs[1]!
-  let numCols := (Lean.Expr.natLit? x).get!
-  let numRows := (Lean.Expr.natLit? y).get!
+  let numCols := (Lean.Expr.rawNatLit? x).get!
+  let numRows := (Lean.Expr.rawNatLit? y).get!
   return Coords.mk numCols numRows
 
 partial def extractWallList : Lean.Expr → Lean.MetaM (List Coords)
@@ -181,19 +181,19 @@ inductive Move where
 @[simp]
 def make_move : GameState → Move → GameState
 | ⟨s, ⟨x,y⟩, w⟩, Move.east =>
-             if w.notElem ⟨x+1, y⟩ ∧ x + 1 ≤ s.x
+             if !w.elem ⟨x+1, y⟩ ∧ x + 1 ≤ s.x
              then ⟨s, ⟨x+1, y⟩, w⟩
              else ⟨s, ⟨x,y⟩, w⟩
 | ⟨s, ⟨x,y⟩, w⟩, Move.west =>
-             if w.notElem ⟨x-1, y⟩
+             if !w.elem ⟨x-1, y⟩
              then ⟨s, ⟨x-1, y⟩, w⟩
              else ⟨s, ⟨x,y⟩, w⟩
 | ⟨s, ⟨x,y⟩, w⟩, Move.north =>
-             if w.notElem ⟨x, y-1⟩
+             if !w.elem ⟨x, y-1⟩
              then ⟨s, ⟨x, y-1⟩, w⟩
              else ⟨s, ⟨x,y⟩, w⟩
 | ⟨s, ⟨x,y⟩, w⟩, Move.south =>
-             if w.notElem ⟨x, y + 1⟩ ∧ y + 1 ≤ s.y
+             if !w.elem ⟨x, y + 1⟩ ∧ y + 1 ≤ s.y
              then ⟨s, ⟨x, y+1⟩, w⟩
              else ⟨s, ⟨x,y⟩, w⟩
 
@@ -211,7 +211,7 @@ theorem step_west
   {s: Coords}
   {x y : Nat}
   {w: List Coords}
-  (hclear' : w.notElem ⟨x,y⟩)
+  (hclear' : !w.elem ⟨x,y⟩)
   (W : can_escape ⟨s,⟨x,y⟩,w⟩) :
   can_escape ⟨s,⟨x+1,y⟩,w⟩ :=
    by have hmm : GameState.mk s ⟨x,y⟩ w = make_move ⟨s,⟨x+1, y⟩,w⟩ Move.west :=
@@ -224,7 +224,7 @@ theorem step_east
   {s: Coords}
   {x y : Nat}
   {w: List Coords}
-  (hclear' : w.notElem ⟨x+1,y⟩)
+  (hclear' : !w.elem ⟨x+1,y⟩)
   (hinbounds : x + 1 ≤ s.x)
   (E : can_escape ⟨s,⟨x+1,y⟩,w⟩) :
   can_escape ⟨s,⟨x, y⟩,w⟩ :=
@@ -237,7 +237,7 @@ theorem step_north
   {s: Coords}
   {x y : Nat}
   {w: List Coords}
-  (hclear' : w.notElem ⟨x,y⟩)
+  (hclear' : !w.elem ⟨x,y⟩)
   (N : can_escape ⟨s,⟨x,y⟩,w⟩) :
   can_escape ⟨s,⟨x, y+1⟩,w⟩ :=
     by have hmm : GameState.mk s ⟨x,y⟩ w = make_move ⟨s,⟨x, y+1⟩,w⟩ Move.north :=
@@ -250,7 +250,7 @@ theorem step_south
   {s: Coords}
   {x y : Nat}
   {w: List Coords}
-  (hclear' : w.notElem ⟨x,y+1⟩)
+  (hclear' : !w.elem ⟨x,y+1⟩)
   (hinbounds : y + 1 ≤ s.y)
   (S : can_escape ⟨s,⟨x,y+1⟩,w⟩) :
   can_escape ⟨s,⟨x, y⟩,w⟩ :=

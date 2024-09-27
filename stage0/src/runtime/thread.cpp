@@ -9,6 +9,9 @@ Author: Leonardo de Moura
 #include <iostream>
 #ifdef LEAN_WINDOWS
 #include <windows.h>
+# ifdef LEAN_AUTO_THREAD_FINALIZATION
+#include <pthread.h>
+# endif
 #else
 #include <pthread.h>
 #endif
@@ -46,18 +49,26 @@ void reset_thread_local() {
 
 using runnable = std::function<void()>;
 
-static void thread_main(void * p) {
+extern "C" LEAN_EXPORT void lean_initialize_thread() {
 #ifdef LEAN_SMALL_ALLOCATOR
     init_thread_heap();
 #endif
+}
+
+extern "C" LEAN_EXPORT void lean_finalize_thread() {
+    run_thread_finalizers();
+    run_post_thread_finalizers();
+}
+
+static void thread_main(void * p) {
+    lean_initialize_thread();
     std::unique_ptr<runnable> f;
     f.reset(reinterpret_cast<runnable *>(p));
 
     (*f)();
     f.reset();
 
-    run_thread_finalizers();
-    run_post_thread_finalizers();
+    lean_finalize_thread();
 }
 
 #if defined(LEAN_MULTI_THREAD)

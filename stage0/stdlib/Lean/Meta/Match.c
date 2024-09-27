@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Meta.Match
-// Imports: Init Lean.Meta.Match.MatchPatternAttr Lean.Meta.Match.Match Lean.Meta.Match.CaseValues Lean.Meta.Match.CaseArraySizes Lean.Meta.Match.MatchEqs
+// Imports: Lean.Meta.Match.MatchPatternAttr Lean.Meta.Match.Match Lean.Meta.Match.CaseValues Lean.Meta.Match.CaseArraySizes Lean.Meta.Match.MatchEqs
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -37,7 +37,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Match___hyg_4____closed
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Meta", 4);
+x_1 = lean_mk_string_unchecked("Meta", 4, 4);
 return x_1;
 }
 }
@@ -45,7 +45,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Match___hyg_4____closed
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Match", 5);
+x_1 = lean_mk_string_unchecked("Match", 5, 5);
 return x_1;
 }
 }
@@ -63,7 +63,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Match___hyg_4____closed
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("Lean", 4);
+x_1 = lean_mk_string_unchecked("Lean", 4, 4);
 return x_1;
 }
 }
@@ -81,7 +81,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Match___hyg_4____closed
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("initFn", 6);
+x_1 = lean_mk_string_unchecked("initFn", 6, 6);
 return x_1;
 }
 }
@@ -99,7 +99,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Match___hyg_4____closed
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("_@", 2);
+x_1 = lean_mk_string_unchecked("_@", 2, 2);
 return x_1;
 }
 }
@@ -147,7 +147,7 @@ static lean_object* _init_l_Lean_initFn____x40_Lean_Meta_Match___hyg_4____closed
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_mk_string_from_bytes("_hyg", 4);
+x_1 = lean_mk_string_unchecked("_hyg", 4, 4);
 return x_1;
 }
 }
@@ -182,7 +182,6 @@ x_5 = l_Lean_registerTraceClass(x_2, x_3, x_4, x_1);
 return x_5;
 }
 }
-lean_object* initialize_Init(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Match_MatchPatternAttr(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Match_Match(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_Match_CaseValues(uint8_t builtin, lean_object*);
@@ -193,9 +192,6 @@ LEAN_EXPORT lean_object* initialize_Lean_Meta_Match(uint8_t builtin, lean_object
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init(builtin, lean_io_mk_world());
-if (lean_io_result_is_error(res)) return res;
-lean_dec_ref(res);
 res = initialize_Lean_Meta_Match_MatchPatternAttr(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);

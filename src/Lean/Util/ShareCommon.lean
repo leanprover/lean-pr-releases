@@ -3,8 +3,10 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
-import Lean.Data.HashSet
-import Lean.Data.HashMap
+prelude
+import Init.ShareCommon
+import Std.Data.HashSet
+import Std.Data.HashMap
 import Lean.Data.PersistentHashMap
 import Lean.Data.PersistentHashSet
 
@@ -13,8 +15,8 @@ namespace Lean.ShareCommon
 
 def objectFactory :=
   StateFactory.mk {
-    Map := HashMap, mkMap := (mkHashMap ·), mapFind? := (·.find?), mapInsert := (·.insert)
-    Set := HashSet, mkSet := (mkHashSet ·), setFind? := (·.find?), setInsert := (·.insert)
+    Map := Std.HashMap, mkMap := (Std.HashMap.empty ·), mapFind? := (·.get?), mapInsert := (·.insert)
+    Set := Std.HashSet, mkSet := (Std.HashSet.empty ·), setFind? := (·.get?), setInsert := (·.insert)
   }
 
 def persistentObjectFactory :=

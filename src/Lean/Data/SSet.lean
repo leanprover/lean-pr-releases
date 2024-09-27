@@ -3,6 +3,7 @@ Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Data.SMap
 
 namespace Lean
@@ -32,9 +33,6 @@ abbrev switch (s : SSet α) : SSet α :=
 
 abbrev fold (f : σ → α → σ) (init : σ) (s : SSet α) : σ :=
   SMap.fold (fun d a _ => f d a) init s
-
-abbrev size (s : SSet α) : Nat :=
-  SMap.size s
 
 def toList (m : SSet α) : List α :=
   m.fold (init := []) fun es a => a::es

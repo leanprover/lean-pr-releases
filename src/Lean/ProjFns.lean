@@ -3,6 +3,7 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+prelude
 import Lean.Environment
 
 namespace Lean
@@ -20,7 +21,7 @@ structure ProjectionFunctionInfo where
   i : Nat
   /-- `true` if the structure is a class. -/
   fromClass : Bool
-  deriving Inhabited
+  deriving Inhabited, Repr
 
 @[export lean_mk_projection_info]
 def mkProjectionInfoEx (ctorName : Name) (numParams : Nat) (i : Nat) (fromClass : Bool) : ProjectionFunctionInfo :=

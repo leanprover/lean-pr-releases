@@ -3,6 +3,7 @@ Copyright (c) 2022 Henrik Böving. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Henrik Böving
 -/
+prelude
 import Lean.Compiler.LCNF.CompilerM
 import Lean.Compiler.LCNF.PassManager
 import Lean.Compiler.LCNF.PhaseExt
@@ -30,9 +31,9 @@ def sortedBySize : Probe Decl (Nat × Decl) := fun decls =>
     if sz₁ == sz₂ then Name.lt decl₁.name decl₂.name else sz₁ < sz₂
 
 def countUnique [ToString α] [BEq α] [Hashable α] : Probe α (α × Nat) := fun data => do
-  let mut map := HashMap.empty
+  let mut map := Std.HashMap.empty
   for d in data do
-    if let some count := map.find? d then
+    if let some count := map[d]? then
       map := map.insert d (count + 1)
     else
       map := map.insert d 1

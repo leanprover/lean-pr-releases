@@ -1,10 +1,10 @@
 /-
 Copyright (c) 2022 Mario Carneiro. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-
 Authors: Mario Carneiro
 -/
-import Lean.Meta.Tactic.Simp.SimpTheorems
+prelude
+import Lean.Meta.Tactic.Simp.RegisterCommand
 import Lean.Elab.Command
 import Lean.Elab.SetOption
 import Lean.Linter.Util
@@ -87,7 +87,7 @@ builtin_initialize
         throwError "invalid attribute '{name}', declaration is in an imported module"
       let decl ← getConstInfo declName
       let fnNameStx ← Attribute.Builtin.getIdent stx
-      let key ← Elab.resolveGlobalConstNoOverloadWithInfo fnNameStx
+      let key ← Elab.realizeGlobalConstNoOverloadWithInfo fnNameStx
       unless decl.levelParams.isEmpty && (decl.type == .const ``Handler [] || decl.type == .const ``SimpleHandler []) do
         throwError "unexpected missing docs handler at '{declName}', `MissingDocs.Handler` or `MissingDocs.SimpleHandler` expected"
       if builtin then
@@ -123,7 +123,7 @@ def declModifiersPubNoDoc (mods : Syntax) : Bool :=
 
 def lintDeclHead (k : SyntaxNodeKind) (id : Syntax) : CommandElabM Unit := do
   if k == ``«abbrev» then lintNamed id "public abbrev"
-  else if k == ``«def» then lintNamed id "public def"
+  else if k == ``definition then lintNamed id "public def"
   else if k == ``«opaque» then lintNamed id "public opaque"
   else if k == ``«axiom» then lintNamed id "public axiom"
   else if k == ``«inductive» then lintNamed id "public inductive"
@@ -149,7 +149,7 @@ def checkDecl : SimpleHandler := fun stx => do
           lintField rest[1][0] stx[1] "computed field"
   else if rest.getKind == ``«structure» then
     unless rest[5][2].isNone do
-      let redecls : HashSet String.Pos :=
+      let redecls : Std.HashSet String.Pos :=
         (← get).infoState.trees.foldl (init := {}) fun s tree =>
           tree.foldInfo (init := s) fun _ info s =>
             if let .ofFieldRedeclInfo info := info then
@@ -236,7 +236,7 @@ def checkRegisterSimpAttr : SimpleHandler := mkSimpleHandler "simp attr"
 @[builtin_missing_docs_handler «in»]
 def handleIn : Handler := fun _ stx => do
   if stx[0].getKind == ``«set_option» then
-    let opts ← Elab.elabSetOption stx[0][1] stx[0][2]
+    let opts ← Elab.elabSetOption stx[0][1] stx[0][3]
     withScope (fun scope => { scope with opts }) do
       missingDocs.run stx[2]
   else

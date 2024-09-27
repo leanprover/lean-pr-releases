@@ -9,7 +9,7 @@ import Init.Data.Nat.Linear
 import Init.NotationExtra
 
 theorem Array.of_push_eq_push {as bs : Array α} (h : as.push a = bs.push b) : as = bs ∧ a = b := by
-  simp [push] at h
+  simp only [push, mk.injEq] at h
   have ⟨h₁, h₂⟩ := List.of_concat_eq_concat h
   cases as; cases bs
   simp_all
@@ -34,11 +34,11 @@ private theorem List.of_toArrayAux_eq_toArrayAux {as bs : List α} {cs ds : Arra
 
 @[simp] theorem List.toArray_eq_toArray_eq (as bs : List α) : (as.toArray = bs.toArray) = (as = bs) := by
   apply propext; apply Iff.intro
-  · intro h; simp [toArray] at h; have := of_toArrayAux_eq_toArrayAux h rfl; exact this.1
+  · intro h; simpa [toArray] using h
   · intro h; rw [h]
 
 def Array.mapM' [Monad m] (f : α → m β) (as : Array α) : m { bs : Array β // bs.size = as.size } :=
-  go 0 ⟨mkEmpty as.size, rfl⟩ (by simp_arith)
+  go 0 ⟨mkEmpty as.size, rfl⟩ (by simp)
 where
   go (i : Nat) (acc : { bs : Array β // bs.size = i }) (hle : i ≤ as.size) : m { bs : Array β // bs.size = as.size } := do
     if h : i = as.size then
@@ -47,7 +47,8 @@ where
       have hlt : i < as.size := Nat.lt_of_le_of_ne hle h
       let b ← f as[i]
       go (i+1) ⟨acc.val.push b, by simp [acc.property]⟩ hlt
-termination_by go i _ _ => as.size - i
+  termination_by as.size - i
+  decreasing_by decreasing_trivial_pre_omega
 
 @[inline] private unsafe def mapMonoMImp [Monad m] (as : Array α) (f : α → m α) : m (Array α) :=
   go 0 as
