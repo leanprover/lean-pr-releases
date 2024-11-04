@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Meta.Offset
-// Imports: Lean.Data.LBool Lean.Meta.InferType Lean.Meta.NatInstTesters Lean.Meta.NatInstTesters Lean.Util.SafeExponentiation
+// Imports: Init.Control.Option Lean.Data.LBool Lean.Meta.InferType Lean.Meta.NatInstTesters Lean.Util.SafeExponentiation
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -68,7 +68,6 @@ static lean_object* l_Lean_Meta_evalNat_visit___closed__33;
 static lean_object* l_Lean_Meta_isOffset_x3f___closed__1;
 lean_object* lean_st_ref_take(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l___private_Lean_Meta_Offset_0__Lean_Meta_mkOffset(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
-uint8_t lean_nat_dec_eq(lean_object*, lean_object*);
 lean_object* lean_is_expr_def_eq(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 static lean_object* l_Lean_Meta_isDefEqOffset___closed__1;
 static lean_object* l_Lean_Meta_evalNat_visit___closed__51;
@@ -126,6 +125,7 @@ lean_object* lean_nat_pow(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_Meta_evalNat_visit___lambda__9(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 static lean_object* l_Lean_Meta_evalNat_visit___closed__69;
 LEAN_EXPORT lean_object* l_Lean_Meta_evalNat_visit(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
+uint8_t lean_nat_dec_eq(lean_object*, lean_object*);
 static lean_object* l_Lean_Meta_evalNat_visit___closed__15;
 LEAN_EXPORT lean_object* l_Lean_Meta_evalNat_visit___lambda__12(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_Meta_isOffset_x3f___lambda__1(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
@@ -10048,9 +10048,9 @@ return x_433;
 }
 }
 }
+lean_object* initialize_Init_Control_Option(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Data_LBool(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_InferType(uint8_t builtin, lean_object*);
-lean_object* initialize_Lean_Meta_NatInstTesters(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Meta_NatInstTesters(uint8_t builtin, lean_object*);
 lean_object* initialize_Lean_Util_SafeExponentiation(uint8_t builtin, lean_object*);
 static bool _G_initialized = false;
@@ -10058,13 +10058,13 @@ LEAN_EXPORT lean_object* initialize_Lean_Meta_Offset(uint8_t builtin, lean_objec
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
+res = initialize_Init_Control_Option(builtin, lean_io_mk_world());
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
 res = initialize_Lean_Data_LBool(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = initialize_Lean_Meta_InferType(builtin, lean_io_mk_world());
-if (lean_io_result_is_error(res)) return res;
-lean_dec_ref(res);
-res = initialize_Lean_Meta_NatInstTesters(builtin, lean_io_mk_world());
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = initialize_Lean_Meta_NatInstTesters(builtin, lean_io_mk_world());

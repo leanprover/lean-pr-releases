@@ -434,7 +434,7 @@ private def expandParentFields (s : Struct) : TermElabM Struct := do
     | { lhs := .fieldName ref fieldName :: _,    .. } =>
       addCompletionInfo <| CompletionInfo.fieldId ref fieldName (← getLCtx) s.structName
       match findField? env s.structName fieldName with
-      | none => throwErrorAt ref "'{fieldName}' is not a field of structure '{MessageData.ofConstName s.structName}'"
+      | none => throwErrorAt ref "'{fieldName}' is not a field of structure '{.ofConstName s.structName}'"
       | some baseStructName =>
         if baseStructName == s.structName then pure field
         else match getPathToBaseStructure? env baseStructName s.structName with
@@ -473,7 +473,10 @@ private def getFieldIdx (structName : Name) (fieldNames : Array Name) (fieldName
 def mkProjStx? (s : Syntax) (structName : Name) (fieldName : Name) : TermElabM (Option Syntax) := do
   if (findField? (← getEnv) structName fieldName).isNone then
     return none
-  return some <| mkNode ``Parser.Term.proj #[s, mkAtomFrom s ".", mkIdentFrom s fieldName]
+  return some <|
+    mkNode ``Parser.Term.explicit
+      #[mkAtomFrom s "@",
+        mkNode ``Parser.Term.proj #[s, mkAtomFrom s ".", mkIdentFrom s fieldName]]
 
 def findField? (fields : Fields) (fieldName : Name) : Option (Field Struct) :=
   fields.find? fun field =>
@@ -682,7 +685,12 @@ private partial def elabStruct (s : Struct) (expectedType? : Option Expr) : Term
               -- We add info to get reliable positions for messages from evaluating the tactic script.
               let info := field.ref.getHeadInfo
               let stx := stx.raw.rewriteBottomUp (·.setInfo info)
-              cont (← elabTermEnsuringType stx (d.getArg! 0).consumeTypeAnnotations) field
+              let type := (d.getArg! 0).consumeTypeAnnotations
+              let mvar ← mkTacticMVar type stx (.fieldAutoParam fieldName s.structName)
+              -- Note(kmill): We are adding terminfo to simulate a previous implementation that elaborated `tacticBlock`.
+              -- (See the aforementioned `processExplicitArg` for a comment about this.)
+              addTermInfo' stx mvar
+              cont mvar field
           | _ =>
             if bi == .instImplicit then
               let val ← withRef field.ref <| mkFreshExprMVar d .synthetic
@@ -818,9 +826,12 @@ def mkDefaultValue? (struct : Struct) (cinfo : ConstantInfo) : TermElabM (Option
 /-- Reduce default value. It performs beta reduction and projections of the given structures. -/
 partial def reduce (structNames : Array Name) (e : Expr) : MetaM Expr := do
   match e with
-  | .lam ..       => lambdaLetTelescope e fun xs b => do mkLambdaFVars xs (← reduce structNames b)
-  | .forallE ..   => forallTelescope e fun xs b => do mkForallFVars xs (← reduce structNames b)
-  | .letE ..      => lambdaLetTelescope e fun xs b => do mkLetFVars xs (← reduce structNames b)
+  | .forallE ..   =>
+    forallTelescope e fun xs b => withReduceLCtx xs do
+      mkForallFVars xs (← reduce structNames b)
+  | .lam .. | .letE .. =>
+    lambdaLetTelescope e fun xs b => withReduceLCtx xs do
+      mkLambdaFVars (usedLetOnly := true) xs (← reduce structNames b)
   | .proj _ i b   =>
     match (← Meta.project? b i) with
     | some r => reduce structNames r
@@ -850,6 +861,24 @@ partial def reduce (structNames : Array Name) (e : Expr) : MetaM Expr := do
     | some val => if val.isMVar then pure val else reduce structNames val
     | none     => return e
   | e => return e
+where
+  /--
+  Reduce the types and values of the local variables `xs` in the local context.
+  -/
+  withReduceLCtx {α} (xs : Array Expr) (k : MetaM α) (i : Nat := 0) : MetaM α := do
+    if h : i < xs.size then
+      let fvarId := xs[i].fvarId!
+      let decl ← fvarId.getDecl
+      let type ← reduce structNames decl.type
+      let mut lctx ← getLCtx
+      if let some value := decl.value? then
+        let value ← reduce structNames value
+        lctx := lctx.modifyLocalDecl fvarId (· |>.setType type |>.setValue value)
+      else
+        lctx := lctx.modifyLocalDecl fvarId (· |>.setType type)
+      withLCtx lctx (← getLocalInstances) (withReduceLCtx xs k (i + 1))
+    else
+      k
 
 partial def tryToSynthesizeDefault (structs : Array Struct) (allStructNames : Array Name) (maxDistance : Nat) (fieldName : Name) (mvarId : MVarId) : TermElabM Bool :=
   let rec loop (i : Nat) (dist : Nat) := do
@@ -865,6 +894,7 @@ partial def tryToSynthesizeDefault (structs : Array Struct) (allStructNames : Ar
         | none     => setMCtx mctx; loop (i+1) (dist+1)
         | some val =>
           let val ← reduce allStructNames val
+          trace[Elab.struct] "default value for {fieldName}:{indentExpr val}"
           match val.find? fun e => (defaultMissing? e).isSome with
           | some _ => setMCtx mctx; loop (i+1) (dist+1)
           | none   =>

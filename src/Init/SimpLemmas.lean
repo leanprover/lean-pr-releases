@@ -54,6 +54,13 @@ theorem forall_prop_domain_congr {p₁ p₂ : Prop} {q₁ : p₁ → Prop} {q₂
     : (∀ a : p₁, q₁ a) = (∀ a : p₂, q₂ a) := by
   subst h₁; simp [← h₂]
 
+theorem forall_prop_congr_dom {p₁ p₂ : Prop} (h : p₁ = p₂) (q : p₁ → Prop) :
+    (∀ a : p₁, q a) = (∀ a : p₂, q (h.substr a)) :=
+  h ▸ rfl
+
+theorem pi_congr {α : Sort u} {β β' : α → Sort v} (h : ∀ a, β a = β' a) : (∀ a, β a) = ∀ a, β' a :=
+  (funext h : β = β') ▸ rfl
+
 theorem let_congr {α : Sort u} {β : Sort v} {a a' : α} {b b' : α → β}
     (h₁ : a = a') (h₂ : ∀ x, b x = b' x) : (let x := a; b x) = (let x := a'; b' x) :=
   h₁ ▸ (funext h₂ : b = b') ▸ rfl
@@ -231,8 +238,21 @@ instance : Std.Associative (· || ·) := ⟨Bool.or_assoc⟩
 @[simp] theorem Bool.not_false : (!false) = true := by decide
 @[simp] theorem beq_true  (b : Bool) : (b == true)  =  b := by cases b <;> rfl
 @[simp] theorem beq_false (b : Bool) : (b == false) = !b := by cases b <;> rfl
-@[simp] theorem Bool.not_eq_true'  (b : Bool) : ((!b) = true) = (b = false) := by cases b <;> simp
-@[simp] theorem Bool.not_eq_false' (b : Bool) : ((!b) = false) = (b = true) := by cases b <;> simp
+
+
+/--
+We move `!` from the left hand side of an equality to the right hand side.
+This helps confluence, and also helps combining pairs of `!`s.
+-/
+@[simp] theorem Bool.not_eq_eq_eq_not {a b : Bool} : ((!a) = b) ↔ (a = !b) := by
+  cases a <;> cases b <;> simp
+
+@[simp] theorem Bool.not_eq_not {a b : Bool} : ¬a = !b ↔ a = b := by
+  cases a <;> cases b <;> simp
+theorem Bool.not_not_eq {a b : Bool} : ¬(!a) = b ↔ a = b := by simp
+
+theorem Bool.not_eq_true'  (b : Bool) : ((!b) = true) = (b = false) := by simp
+theorem Bool.not_eq_false' (b : Bool) : ((!b) = false) = (b = true) := by simp
 
 @[simp] theorem Bool.not_eq_true (b : Bool) : (¬(b = true)) = (b = false) := by cases b <;> decide
 @[simp] theorem Bool.not_eq_false (b : Bool) : (¬(b = false)) = (b = true) := by cases b <;> decide

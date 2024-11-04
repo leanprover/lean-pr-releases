@@ -13,7 +13,7 @@ This module contains the types
 * `IndGroupInst` which extends `IndGroupInfo` with levels and parameters
    to indicate a instantiation of the group.
 
-One purpose of this abstraction is to make it clear when a fuction operates on a group as
+One purpose of this abstraction is to make it clear when a function operates on a group as
 a whole, rather than a specific inductive within the group.
 -/
 
@@ -105,6 +105,6 @@ def IndGroupInst.nestedTypeFormers (igi : IndGroupInst) : MetaM (Array Expr) := 
   auxMotives.mapM fun motive =>
     forallTelescopeReducing motive fun xs _ => do
       assert! xs.size > 0
-      mkForallFVars xs.pop (← inferType xs.back)
+      mkForallFVars xs.pop (← inferType xs.back!)
 
 end Lean.Elab.Structural

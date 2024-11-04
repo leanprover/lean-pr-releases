@@ -28,7 +28,7 @@ register_builtin_option backward.isDefEq.lazyWhnfCore : Bool := {
   This function is used to filter unification problems in
   `isDefEqArgs`/`isDefEqEtaStruct` where we can assign proofs.
   If one side is of the form described above, then we can likely assign `?m`.
-  But it it's not, we would most likely apply proof irrelevance, which is
+  But if it's not, we would most likely apply proof irrelevance, which is
   usually very expensive since it needs to unify the types as well.
 -/
 def isAbstractedUnassignedMVar : Expr → MetaM Bool
@@ -80,19 +80,19 @@ where
         checkpointDefEq do
           let args := b.getAppArgs
           let params := args[:ctorVal.numParams].toArray
-          for i in [ctorVal.numParams : args.size] do
+          for h : i in [ctorVal.numParams : args.size] do
             let j := i - ctorVal.numParams
             let proj ← mkProjFn ctorVal us params j a
             if ← isProof proj then
-              unless ← isAbstractedUnassignedMVar args[i]! do
+              unless ← isAbstractedUnassignedMVar args[i] do
                 -- Skip expensive unification problem that is likely solved
                 -- using proof irrelevance.  We already know that `proj` and
-                -- `args[i]!` have the same type, so they're defeq in any case.
+                -- `args[i]` have the same type, so they're defeq in any case.
                 -- See comment at `isAbstractedUnassignedMVar`.
                 continue
-            trace[Meta.isDefEq.eta.struct] "{a} =?= {b} @ [{j}], {proj} =?= {args[i]!}"
-            unless (← isDefEq proj args[i]!) do
-              trace[Meta.isDefEq.eta.struct] "failed, unexpect arg #{i}, projection{indentExpr proj}\nis not defeq to{indentExpr args[i]!}"
+            trace[Meta.isDefEq.eta.struct] "{a} =?= {b} @ [{j}], {proj} =?= {args[i]}"
+            unless (← isDefEq proj args[i]) do
+              trace[Meta.isDefEq.eta.struct] "failed, unexpected arg #{i}, projection{indentExpr proj}\nis not defeq to{indentExpr args[i]}"
               return false
           return true
       else
@@ -418,7 +418,7 @@ This method assumes that for any `xs[i]` and `xs[j]` where `i < j`, we have that
 where the index is the position in the local context.
 -/
 private partial def mkLambdaFVarsWithLetDeps (xs : Array Expr) (v : Expr) : MetaM (Option Expr) := do
-  if not (← hasLetDeclsInBetween) then
+  if !(← hasLetDeclsInBetween) then
     mkLambdaFVars xs v (etaReduce := true)
   else
     let ys ← addLetDeps
@@ -430,7 +430,7 @@ where
   hasLetDeclsInBetween : MetaM Bool := do
     let check (lctx : LocalContext) : Bool := Id.run do
       let start := lctx.getFVar! xs[0]! |>.index
-      let stop  := lctx.getFVar! xs.back |>.index
+      let stop  := lctx.getFVar! xs.back! |>.index
       for i in [start+1:stop] do
         match lctx.getAt? i with
         | some localDecl =>
@@ -488,7 +488,7 @@ where
   collectLetDeps : MetaM FVarIdHashSet := do
     let lctx ← getLCtx
     let start := lctx.getFVar! xs[0]! |>.index
-    let stop  := lctx.getFVar! xs.back |>.index
+    let stop  := lctx.getFVar! xs.back! |>.index
     let s := xs.foldl (init := {}) fun s x => s.insert x.fvarId!
     let (_, s) ← collectLetDepsAux stop |>.run start |>.run s
     return s
@@ -500,7 +500,7 @@ where
     let s ← collectLetDeps
     /- Convert `s` into the array `ys` -/
     let start := lctx.getFVar! xs[0]! |>.index
-    let stop  := lctx.getFVar! xs.back |>.index
+    let stop  := lctx.getFVar! xs.back! |>.index
     let mut ys := #[]
     for i in [start:stop+1] do
       match lctx.getAt? i with
@@ -978,7 +978,7 @@ where
   occursCheck (type : Expr) : Bool :=
     let go : StateM MetavarContext Bool := do
       Lean.occursCheck mvarId type
-    -- Remark: it is ok to discard the the "updated" `MetavarContext` because
+    -- Remark: it is ok to discard the "updated" `MetavarContext` because
     -- this function assumes all assigned metavariables have already been
     -- instantiated.
     go.run' mctx
@@ -1072,7 +1072,7 @@ private def processAssignmentFOApproxAux (mvar : Expr) (args : Array Expr) (v : 
     if args.isEmpty then
       pure false
     else
-      Meta.isExprDefEqAux args.back a <&&> Meta.isExprDefEqAux (mkAppRange mvar 0 (args.size - 1) args) f
+      Meta.isExprDefEqAux args.back! a <&&> Meta.isExprDefEqAux (mkAppRange mvar 0 (args.size - 1) args) f
   | _            => pure false
 
 /--
@@ -1178,7 +1178,7 @@ private partial def processConstApprox (mvar : Expr) (args : Array Expr) (patter
             if argsPrefix.isEmpty then
               defaultCase
             else
-              let some v ← mkLambdaFVarsWithLetDeps #[argsPrefix.back] v | defaultCase
+              let some v ← mkLambdaFVarsWithLetDeps #[argsPrefix.back!] v | defaultCase
               go argsPrefix.pop v
           match (← checkAssignment mvarId argsPrefix v) with
           | none      => cont
@@ -1486,7 +1486,7 @@ private def unfoldReducibeDefEq (tInfo sInfo : ConstantInfo) (t s : Expr) : Meta
   ```
   Foo.pow x 256 =?= Pow.pow x 256
   ```
-  where the the `Pow` instance is wrapping `Foo.pow`
+  where the `Pow` instance is wrapping `Foo.pow`
   See issue #1419 for the complete example.
 -/
 private partial def unfoldNonProjFnDefEq (tInfo sInfo : ConstantInfo) (t s : Expr) : MetaM LBool := do
@@ -1879,7 +1879,7 @@ inductive DeltaStepResult where
 
 /--
 Perform one step of lazy delta reduction. This function decides whether to perform delta-reduction on `t`, `s`, or both.
-It is currently used to solve contraints of the form `(f a).i =?= (g a).i` where `i` is a numeral at `isDefEqProjDelta`.
+It is currently used to solve constraints of the form `(f a).i =?= (g a).i` where `i` is a numeral at `isDefEqProjDelta`.
 It is also a simpler version of `isDefEqDelta`. In the future, we may decide to combine these two functions like we do
 in the kernel.
 -/
@@ -1919,7 +1919,7 @@ where
     | .undef => return .cont t s
 
 /--
-Helper function for solving contraints of the form `t.i =?= s.i`.
+Helper function for solving constraints of the form `t.i =?= s.i`.
 -/
 private partial def isDefEqProjDelta (t s : Expr) (i : Nat) : MetaM Bool := do
   let t ← whnfCore t
@@ -1975,7 +1975,7 @@ where
       assign `?m`.
       -/
       return false
-    let ctorVal := getStructureCtor (← getEnv) structName
+    let some ctorVal := getStructureLikeCtor? (← getEnv) structName | return false
     if ctorVal.numFields != 1 then
       return false -- It is not a structure with a single field.
     let sType ← whnf (← inferType s)
@@ -2013,7 +2013,7 @@ private def isDefEqApp (t s : Expr) : MetaM Bool := do
 /-- Return `true` if the type of the given expression is an inductive datatype with a single constructor with no fields. -/
 private def isDefEqUnitLike (t : Expr) (s : Expr) : MetaM Bool := do
   let tType ← whnf (← inferType t)
-  matchConstStruct tType.getAppFn (fun _ => return false) fun _ _ ctorVal => do
+  matchConstStructureLike tType.getAppFn (fun _ => return false) fun _ _ ctorVal => do
     if ctorVal.numFields != 0 then
       return false
     else if (← useEtaStruct ctorVal.induct) then

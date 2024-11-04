@@ -185,12 +185,12 @@ inductive B (m : Nat) : Nat → Type
 end
 
 mutual
-def A.size (m n : Nat) : A m n → Nat
+def A.size {m n : Nat} : A m n → Nat
   | .self a => a.size + m
   | .other b => b.size + m
   | .empty => 0
 termination_by structural x => x
-def B.size (m n : Nat): B m n → Nat
+def B.size {m n : Nat} : B m n → Nat
   | .self b => b.size + m
   | .other a => a.size + m
   | .empty => 0
@@ -470,7 +470,7 @@ error: cannot use specified parameter for structural recursion:
   which does not come before the varying parameters and before the indices of the recursion parameter.
 -/
 #guard_msgs in
-def T.a (n : Nat) : T n n → Nat
+def T.a {n : Nat} : T n n → Nat
   | .z => 0
   | .n t => t.a + 1
 termination_by structural t => t
@@ -631,7 +631,7 @@ namespace FunIndTests
 info: A.size.induct (motive_1 : A → Prop) (motive_2 : B → Prop) (case1 : ∀ (a : A), motive_1 a → motive_1 a.self)
   (case2 : ∀ (b : B), motive_2 b → motive_1 (A.other b)) (case3 : motive_1 A.empty)
   (case4 : ∀ (b : B), motive_2 b → motive_2 b.self) (case5 : ∀ (a : A), motive_1 a → motive_2 (B.other a))
-  (case6 : motive_2 B.empty) : ∀ (a : A), motive_1 a
+  (case6 : motive_2 B.empty) (a✝ : A) : motive_1 a✝
 -/
 #guard_msgs in
 #check A.size.induct
@@ -649,7 +649,7 @@ info: A.subs.induct (motive_1 : A → Prop) (motive_2 : B → Prop) (case1 : ∀
 info: MutualIndNonMutualFun.A.self_size.induct (motive : MutualIndNonMutualFun.A → Prop)
   (case1 : ∀ (a : MutualIndNonMutualFun.A), motive a → motive a.self)
   (case2 : ∀ (a : MutualIndNonMutualFun.B), motive (MutualIndNonMutualFun.A.other a))
-  (case3 : motive MutualIndNonMutualFun.A.empty) : ∀ (a : MutualIndNonMutualFun.A), motive a
+  (case3 : motive MutualIndNonMutualFun.A.empty) (a✝ : MutualIndNonMutualFun.A) : motive a✝
 -/
 #guard_msgs in
 #check MutualIndNonMutualFun.A.self_size.induct
@@ -658,8 +658,8 @@ info: MutualIndNonMutualFun.A.self_size.induct (motive : MutualIndNonMutualFun.A
 info: MutualIndNonMutualFun.A.self_size_with_param.induct (motive : Nat → MutualIndNonMutualFun.A → Prop)
   (case1 : ∀ (n : Nat) (a : MutualIndNonMutualFun.A), motive n a → motive n a.self)
   (case2 : ∀ (x : Nat) (a : MutualIndNonMutualFun.B), motive x (MutualIndNonMutualFun.A.other a))
-  (case3 : ∀ (x : Nat), motive x MutualIndNonMutualFun.A.empty) :
-  ∀ (a : Nat) (a_1 : MutualIndNonMutualFun.A), motive a a_1
+  (case3 : ∀ (x : Nat), motive x MutualIndNonMutualFun.A.empty) (a✝ : Nat) (a✝¹ : MutualIndNonMutualFun.A) :
+  motive a✝ a✝¹
 -/
 #guard_msgs in
 #check MutualIndNonMutualFun.A.self_size_with_param.induct
@@ -668,7 +668,7 @@ info: MutualIndNonMutualFun.A.self_size_with_param.induct (motive : Nat → Mutu
 info: A.hasNoBEmpty.induct (motive_1 : A → Prop) (motive_2 : B → Prop) (case1 : ∀ (a : A), motive_1 a → motive_1 a.self)
   (case2 : ∀ (b : B), motive_2 b → motive_1 (A.other b)) (case3 : motive_1 A.empty)
   (case4 : ∀ (b : B), motive_2 b → motive_2 b.self) (case5 : ∀ (a : A), motive_1 a → motive_2 (B.other a))
-  (case6 : motive_2 B.empty) : ∀ (a : A), motive_1 a
+  (case6 : motive_2 B.empty) (a✝ : A) : motive_1 a✝
 -/
 #guard_msgs in
 #check A.hasNoBEmpty.induct
@@ -676,7 +676,7 @@ info: A.hasNoBEmpty.induct (motive_1 : A → Prop) (motive_2 : B → Prop) (case
 /--
 info: EvenOdd.isEven.induct (motive_1 motive_2 : Nat → Prop) (case1 : motive_1 0)
   (case2 : ∀ (n : Nat), motive_2 n → motive_1 n.succ) (case3 : motive_2 0)
-  (case4 : ∀ (n : Nat), motive_1 n → motive_2 n.succ) : ∀ (a : Nat), motive_1 a
+  (case4 : ∀ (n : Nat), motive_1 n → motive_2 n.succ) (a✝ : Nat) : motive_1 a✝
 -/
 #guard_msgs in
 #check EvenOdd.isEven.induct
@@ -696,7 +696,7 @@ info: WithTuple.Tree.map.induct {α β : Type} (f : α → β) (motive_1 : WithT
 info: WithArray.Tree.map.induct {α β : Type} (f : α → β) (motive_1 : WithArray.Tree α → Prop)
   (motive_2 : Array (WithArray.Tree α) → Prop) (motive_3 : List (WithArray.Tree α) → Prop)
   (case1 : ∀ (x : α) (arr₁ : Array (WithArray.Tree α)), motive_2 arr₁ → motive_1 (WithArray.Tree.node x arr₁))
-  (case2 : ∀ (arr₁ : List (WithArray.Tree α)), motive_3 arr₁ → motive_2 { data := arr₁ }) (case3 : motive_3 [])
+  (case2 : ∀ (arr₁ : List (WithArray.Tree α)), motive_3 arr₁ → motive_2 { toList := arr₁ }) (case3 : motive_3 [])
   (case4 : ∀ (h₁ : WithArray.Tree α) (t₁ : List (WithArray.Tree α)), motive_1 h₁ → motive_3 t₁ → motive_3 (h₁ :: t₁))
   (x : WithArray.Tree α) : motive_1 x
 -/

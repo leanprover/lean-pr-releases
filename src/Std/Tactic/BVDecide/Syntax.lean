@@ -15,7 +15,7 @@ namespace Tactic
 
 /--
 This tactic works just like `bv_decide` but skips calling a SAT solver by using a proof that is
-alreay stored on disk. It is called with the name of an LRAT file in the same directory as the
+already stored on disk. It is called with the name of an LRAT file in the same directory as the
 current Lean file:
 ```
 bv_check "proof.lrat"
@@ -26,11 +26,7 @@ syntax (name := bvCheck) "bv_check " str : tactic
 /--
 Close fixed-width `BitVec` and `Bool` goals by obtaining a proof from an external SAT solver and
 verifying it inside Lean. The solvable goals are currently limited to the Lean equivalent of
-[`QF_BV`](https://smt-lib.org/logics-all.shtml#QF_BV) with the following changes:
-- Division and remainder operations are not yet implemented.
-- if-then-else is not yet implemented.
-- `BitVec.ofBool` is not yet implemented.
-
+[`QF_BV`](https://smt-lib.org/logics-all.shtml#QF_BV):
 ```lean
 example : ∀ (a b : BitVec 64), (a &&& b) + (a ^^^ b) = a ||| b := by
   intros
@@ -45,6 +41,10 @@ If `bv_decide` fails to close a goal it provides a counter-example, containing a
 terms that were considered as variables.
 
 In order to avoid calling a SAT solver every time, the proof can be cached with `bv_decide?`.
+
+If solving your problem relies inherently on using associativity or commutativity, consider enabling
+the `bv.ac_nf` option.
+
 
 Note: `bv_decide` uses `ofReduceBool` and thus trusts the correctness of the code generator.
 -/

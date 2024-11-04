@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2023 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Joe Hendrix, Scott Morrison
+Authors: Joe Hendrix, Kim Morrison
 -/
 prelude
 import Lean.Meta.CompletionName
@@ -77,7 +77,7 @@ private def ignoreArg (a : Expr) (i : Nat) (infos : Array ParamInfo) : MetaM Boo
     if info.isInstImplicit then
       return true
     else if info.isImplicit || info.isStrictImplicit then
-      return not (← isType a)
+      return !(← isType a)
     else
       isProof a
   else
@@ -396,7 +396,7 @@ private partial def buildPath (op : Bool → Array Expr → Expr → MetaM (Key 
   if todo.isEmpty then
     return keys
   else
-    let e    := todo.back
+    let e    := todo.back!
     let todo := todo.pop
     let (k, todo) ← op root todo e
     buildPath op false todo (keys.push k)
@@ -454,7 +454,7 @@ private def evalLazyEntry (config : WhnfCoreConfig)
     let values := values.push v
     pure (values, starIdx, children)
   else
-    let e    := todo.back
+    let e    := todo.back!
     let todo := todo.pop
     let (k, todo) ← withLCtx lctx.1 lctx.2 $ pushArgs false todo e config
     if k == .star then
@@ -608,7 +608,7 @@ private partial def getMatchLoop (cases : Array PartialMatch) (result : MatchRes
   if cases.isEmpty then
     pure result
   else do
-    let ca := cases.back
+    let ca := cases.back!
     let cases := cases.pop
     let (vs, star, cs) ← evalNode ca.c
     if ca.todo.isEmpty then
@@ -617,7 +617,7 @@ private partial def getMatchLoop (cases : Array PartialMatch) (result : MatchRes
     else if star == 0 && cs.isEmpty then
       getMatchLoop cases result
     else
-      let e     := ca.todo.back
+      let e     := ca.todo.back!
       let todo  := ca.todo.pop
       /- We must always visit `Key.star` edges since they are wildcards.
           Thus, `todo` is not used linearly when there is `Key.star` edge
@@ -839,7 +839,7 @@ private def addConstImportData
     pure tree
 
 /--
-Contains the pre discrimination tree and any errors occuring during initialization of
+Contains the pre discrimination tree and any errors occurring during initialization of
 the library search tree.
 -/
 private structure InitResults (α : Type) where
