@@ -21,5 +21,9 @@ theorem short_circuit_mul_left (x x_1 : BitVec 32) (h : ¬BitVec.ofBool (x_1 &&&
 
 theorem short_circuit_triple_mul (x x_1 x_2 : BitVec 32) (h : ¬BitVec.ofBool (x_2 &&& 4096#32 == 0#32) = 1#1) :
   (x_1 ||| 4096#32) * x * (x_1 ||| 4096#32) = (x_1 ||| x_2 &&& 4096#32) * x * (x_1 ||| 4096#32) := by
-  bv_normalize -- This is only fast if we call bv_normalize twice in a row.
+  -- This is only fast if we call bv_normalize twice in a row.
+  -- ac_nf also yields a surprising nf:
+  -- x * ((x_1 ||| 4096#32) * (x_1 ||| 4096#32)) = x * ((x_1 ||| 4096#32) * (x_1 ||| x_2 &&& 4096#32))
+  ac_nf
+  bv_normalize
   bv_decide
