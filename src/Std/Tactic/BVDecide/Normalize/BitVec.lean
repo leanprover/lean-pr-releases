@@ -309,5 +309,17 @@ theorem BitVec.udiv_ofNat_eq_of_lt (w : Nat) (x : BitVec w) (n : Nat) (k : Nat) 
   have : BitVec.ofNat w n = BitVec.twoPow w k := by simp [bv_toNat, hk]
   rw [this, BitVec.udiv_twoPow_eq_of_lt (hk := by omega)]
 
+theorem mul_beq_mul_short_circuit_left {x z y : BitVec w} :
+    ((x * z == y * z)) = !(!(x == y) && !(x * z == y * z)) := by
+  simp
+  intros
+  congr
+
+theorem mul_beq_mul_short_circuit_right {x z y : BitVec w} :
+    ((z * x == z * y)) = !(!(x == y) && !(z * x == z * y)) := by
+  simp
+  intros
+  congr
+
 end Normalize
 end Std.Tactic.BVDecide
