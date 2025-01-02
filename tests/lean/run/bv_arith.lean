@@ -72,7 +72,7 @@ theorem arith_unit_19 (x y : BitVec 8)  (hx : x.msb = true) (h : y.msb = true) :
   bv_decide
 
 -- This theorem cannot be short-circuited to eliminate all multipilications,
--- so it is only fast for small  bitwidths.
+-- so it is only fast for small bitwidths.
 theorem mul_mul_eq_mul_mul (x₁ x₂ y₁ y₂ z : BitVec 4) (h₁ : x₁ = x₂) (h₂ : y₁ = y₂) :
     x₁ * (y₁ * z) = x₂ * (y₂ * z) := by
   bv_decide
