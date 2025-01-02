@@ -222,7 +222,8 @@ def rewriteRulesPass (maxSteps : Nat) : Pass where
     return newGoal
 
 /--
-Responsible for applying short-circuit optimizations for `*`.
+Responsible for applying short-circuit optimizations for `*`, e.g.,
+translating `x1 * y == x2 * y` to `!(!x1 == x2 && !x1 * y == x2 * y)`.
 -/
 def shortCircuitPass (maxSteps : Nat) : Pass where
   name := `shortCircuitPass
