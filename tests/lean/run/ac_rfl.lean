@@ -140,3 +140,13 @@ example (a b c d : Nat) (h₁ h₂ : a + b + c + d = d + (b + c) + a) :
   guard_hyp h₂ :ₛ a + (b + (c + d)) = a + (b + (c + d))
 
   ac_nf at *
+
+example (a b c₁ c₂ : Nat) (h : c₁ = c₂) :
+    a + b + c₁ = a + b + c₂ := by
+  ac_nf
+  -- This yields a + (b + c₁) = a + (b + c₂) but we would prefer
+  -- (a + b) + c₁ = (a + b) + c₂ or c₁ + (a + b) = c₂ + (a + b).
+
+  ac_nf at h
+  guard_hyp h :ₛ c₁ = c₂
+  ac_nf

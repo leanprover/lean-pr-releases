@@ -237,6 +237,14 @@ def shortCircuitPass (maxSteps : Nat) : Pass where
     let or : Lean.Meta.Origin := Lean.Meta.Origin.decl `mul_beq_mul_short_circuit_right
     theorems ← theorems.addTheorem or cr
 
+    let cr : Expr := mkConst ``mul_mul_beq_mul_mul_short_circuit_left
+    let or : Lean.Meta.Origin := Lean.Meta.Origin.decl `mul_mul_beq_mul_mul_short_circuit_left
+    theorems ← theorems.addTheorem or cr (eval_prio high)
+
+    let cr : Expr := mkConst ``mul_mul_beq_mul_mul_short_circuit_mid
+    let or : Lean.Meta.Origin := Lean.Meta.Origin.decl `mul_mul_beq_mul_mul_short_circuit_mid
+    theorems ← theorems.addTheorem or cr (eval_prio high)
+
     let simpCtx ← Simp.mkContext
       (config := { failIfUnchanged := false, zetaDelta := true, singlePass := true, maxSteps })
       (simpTheorems := theorems)

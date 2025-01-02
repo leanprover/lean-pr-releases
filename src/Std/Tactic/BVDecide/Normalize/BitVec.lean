@@ -309,14 +309,26 @@ theorem BitVec.udiv_ofNat_eq_of_lt (w : Nat) (x : BitVec w) (n : Nat) (k : Nat) 
   have : BitVec.ofNat w n = BitVec.twoPow w k := by simp [bv_toNat, hk]
   rw [this, BitVec.udiv_twoPow_eq_of_lt (hk := by omega)]
 
-theorem mul_beq_mul_short_circuit_left {x z y : BitVec w} :
-    ((x * z == y * z)) = !(!(x == y) && !(x * z == y * z)) := by
+theorem mul_beq_mul_short_circuit_left {x₁ x₂ y : BitVec w} :
+    (x₁ * y == x₂ * y) = !(!x₁ == x₂ && !x₁ * y == x₂ * y) := by
   simp
   intros
   congr
 
-theorem mul_beq_mul_short_circuit_right {x z y : BitVec w} :
-    ((z * x == z * y)) = !(!(x == y) && !(z * x == z * y)) := by
+theorem mul_beq_mul_short_circuit_right {x y₁ y₂ : BitVec w} :
+    (x * y₁ == x * y₂) = !(!y₁ == y₂ && !x * y₁ == x * y₂) := by
+  simp
+  intros
+  congr
+
+theorem mul_mul_beq_mul_mul_short_circuit_left {x₁ x₂ y z : BitVec w} :
+    (x₁ * y * z == x₂ * y * z) = !(!x₁ == x₂ && !x₁ * y * z == x₂ * y * z) := by
+  simp
+  intros
+  congr
+
+theorem mul_mul_beq_mul_mul_short_circuit_mid {x y₁ y₂ z : BitVec w} :
+    (x * y₁ * z == x * y₂ * z) = !(!y₁ == y₂ && !x * y₁ * z == x * y₂ * z) := by
   simp
   intros
   congr
