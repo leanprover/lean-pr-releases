@@ -71,7 +71,7 @@ theorem arith_unit_18 (x y : BitVec 8)  (hx : x.msb = true) (h : y.msb = true) :
 theorem arith_unit_19 (x y : BitVec 8)  (hx : x.msb = true) (h : y.msb = true) : x.srem y = -((-x) % (-y)) := by
   bv_decide
 
--- This theorem is not short-circuited, so it slow for large bitwidths.
+-- This theorem is not short-circuited, so it is only fast for small  bitwidths.
 theorem mul_mul_eq_mul_mul (x₁ x₂ y₁ y₂ z : BitVec 4) (h₁ : x₁ = y₁) (h₂ : x₂ = y₂) :
     x₁ * (x₂ * z) = y₁ * (y₂ * z) := by
   bv_decide
