@@ -311,25 +311,25 @@ theorem BitVec.udiv_ofNat_eq_of_lt (w : Nat) (x : BitVec w) (n : Nat) (k : Nat) 
 
 theorem mul_beq_mul_short_circuit_left {x₁ x₂ y : BitVec w} :
     (x₁ * y == x₂ * y) = !(!x₁ == x₂ && !x₁ * y == x₂ * y) := by
-  simp
+  simp only [Bool.not_and, Bool.not_not, Bool.iff_or_self, beq_iff_eq]
   intros
   congr
 
 theorem mul_beq_mul_short_circuit_right {x y₁ y₂ : BitVec w} :
     (x * y₁ == x * y₂) = !(!y₁ == y₂ && !x * y₁ == x * y₂) := by
-  simp
+  simp only [Bool.not_and, Bool.not_not, Bool.iff_or_self, beq_iff_eq]
   intros
   congr
 
 theorem mul_mul_beq_mul_mul_short_circuit_left {x₁ x₂ y z : BitVec w} :
     (x₁ * y * z == x₂ * y * z) = !(!x₁ == x₂ && !x₁ * y * z == x₂ * y * z) := by
-  simp
+  simp only [Bool.not_and, Bool.not_not, Bool.iff_or_self, beq_iff_eq]
   intros
   congr
 
 theorem mul_mul_beq_mul_mul_short_circuit_mid {x y₁ y₂ z : BitVec w} :
     (x * y₁ * z == x * y₂ * z) = !(!y₁ == y₂ && !x * y₁ * z == x * y₂ * z) := by
-  simp
+  simp only [Bool.not_and, Bool.not_not, Bool.iff_or_self, beq_iff_eq]
   intros
   congr
 
