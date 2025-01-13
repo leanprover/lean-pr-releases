@@ -3,7 +3,6 @@ if (LIBUV_FOUND)
   set(LIBUV_FIND_QUIETLY TRUE)
 endif (LIBUV_FOUND)
 
-MESSAGE(STATUS "pkg-config binary:" ${PKG_CONFIG_EXECUTABLE})
 find_package(PkgConfig REQUIRED)
 pkg_search_module(LIBUV REQUIRED libuv)
 MESSAGE(STATUS "LIBUV_LDFLAGS: " ${LIBUV_LDFLAGS})
