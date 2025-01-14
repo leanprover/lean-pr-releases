@@ -1929,7 +1929,7 @@ represents an element of `Squash α` the same as `α` itself
 `Squash.lift` will extract a value in any subsingleton `β` from a function on `α`,
 while `Nonempty.rec` can only do the same when `β` is a proposition.
 -/
-def Squash (α : Sort u) := Quotient trueSetoid
+def Squash (α : Sort u) := @Quotient α trueSetoid
 
 /-- The canonical quotient map into `Squash α`. -/
 def Squash.mk {α : Sort u} (x : α) : Squash α := Quot.mk _ x
