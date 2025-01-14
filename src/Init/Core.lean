@@ -1913,7 +1913,7 @@ theorem true_equivalence (α : Sort u) : Equivalence fun _ _ : α ↦ True :=
 
 /-- Always-true relation as a `Setoid`. -/
 def trueSetoid (α : Sort u) : Setoid α :=
-  ⟨_, true_equivalence⟩
+  ⟨_, true_equivalence α⟩
 
 /--
 `Squash α` is the quotient of `α` by the always true relation.
