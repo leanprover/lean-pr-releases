@@ -1908,6 +1908,13 @@ instance Pi.instSubsingleton {α : Sort u} {β : α → Sort v} [∀ a, Subsingl
 
 /-! # Squash -/
 
+theorem true_equivalence : @Equivalence α fun _ _ ↦ True :=
+  ⟨fun _ ↦ trivial, fun _ ↦ trivial, fun _ _ ↦ trivial⟩
+
+/-- Always-true relation as a `Setoid`. -/
+def trueSetoid : Setoid α :=
+  ⟨_, true_equivalence⟩
+
 /--
 `Squash α` is the quotient of `α` by the always true relation.
 It is empty if `α` is empty, otherwise it is a singleton.
@@ -1922,7 +1929,7 @@ represents an element of `Squash α` the same as `α` itself
 `Squash.lift` will extract a value in any subsingleton `β` from a function on `α`,
 while `Nonempty.rec` can only do the same when `β` is a proposition.
 -/
-def Squash (α : Sort u) := Quot (fun (_ _ : α) => True)
+def Squash (α : Sort u) := Quotient trueSetoid
 
 /-- The canonical quotient map into `Squash α`. -/
 def Squash.mk {α : Sort u} (x : α) : Squash α := Quot.mk _ x
