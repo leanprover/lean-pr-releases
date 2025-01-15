@@ -1025,6 +1025,7 @@ theorem mul_add_mod (m x y : Nat) : (m * x + y) % m = y % m := by
 
 instance decidableBallLT (n : Nat) (P : ∀ k, k < n → Prop) [H : ∀ n h, Decidable (P n h)] :
     Decidable (∀ n h, P n h) :=
+  -- tail-recursion doesn't save stack frames in kernel reduction, so we also need a nested loop
   let rec inner : ∀ n1 ≤ n, ∀ n2 ≤ n1, (∀ n h, n1 ≤ n → P n h) → Decidable (∀ n h, n2 ≤ n → P n h)
     | 0, _, _, _, h2 => isTrue fun n' hn' _ => h2 n' hn' (Nat.zero_le _)
     | n1 + 1, h1, n2, hn2, h2 =>
