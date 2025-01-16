@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Sebastian Ullrich, Leonardo de Moura, Gabriel Ebner, Mario Carneiro
 -/
 prelude
-import Lean.Parser
 import Lean.PrettyPrinter.Delaborator.Attributes
 import Lean.PrettyPrinter.Delaborator.Basic
 import Lean.PrettyPrinter.Delaborator.SubExpr
@@ -91,21 +90,32 @@ Rather, it is called through the `app` delaborator.
 -/
 def delabConst : Delab := do
   let Expr.const c₀ ls ← getExpr | unreachable!
-  let c₀ := if (← getPPOption getPPPrivateNames) then c₀ else (privateToUserName? c₀).getD c₀
-
-  let mut c ← unresolveNameGlobal c₀ (fullNames := ← getPPOption getPPFullNames)
-  let stx ← if ls.isEmpty || !(← getPPOption getPPUniverses) then
-    if (← getLCtx).usesUserName c then
-      -- `c` is also a local declaration
-      if c == c₀ && !(← read).inPattern then
-        -- `c` is the fully qualified named. So, we append the `_root_` prefix
-        c := `_root_ ++ c
+  let mut c₀ := c₀
+  let mut c  := c₀
+  if let some n := privateToUserName? c₀ then
+    unless (← getPPOption getPPPrivateNames) do
+      if c₀ == mkPrivateName (← getEnv) n then
+        -- The name is defined in this module, so use `n` as the name and unresolve like any other name.
+        c₀ := n
+        c ← unresolveNameGlobal n (fullNames := ← getPPOption getPPFullNames)
       else
-        c := c₀
-    pure <| mkIdent c
+        -- The name is not defined in this module, so make inaccessible. Unresolving does not make sense to do.
+        c ← withFreshMacroScope <| MonadQuotation.addMacroScope n
   else
-    let mvars ← getPPOption getPPMVarsLevels
-    `($(mkIdent c).{$[$(ls.toArray.map (Level.quote · (prec := 0) (mvars := mvars)))],*})
+    c ← unresolveNameGlobal c (fullNames := ← getPPOption getPPFullNames)
+  let stx ←
+    if ls.isEmpty || !(← getPPOption getPPUniverses) then
+      if (← getLCtx).usesUserName c then
+        -- `c` is also a local declaration
+        if c == c₀ && !(← read).inPattern then
+          -- `c` is the fully qualified named. So, we append the `_root_` prefix
+          c := `_root_ ++ c
+        else
+          c := c₀
+      pure <| mkIdent c
+    else
+      let mvars ← getPPOption getPPMVarsLevels
+      `($(mkIdent c).{$[$(ls.toArray.map (Level.quote · (prec := 0) (mvars := mvars)))],*})
 
   let stx ← maybeAddBlockImplicit stx
   if (← getPPOption getPPTagAppFns) then
@@ -245,12 +255,15 @@ def appFieldNotationCandidate? : DelabM (Option (Nat × Name)) := do
     | return none
   unless idx < e.getAppNumArgs do return none
   /-
-  There are some kinds of expressions that cause issues with field notation,
-  so we prevent using it in these cases.
-  For example, `2.succ` is not parseable.
+  There are some kinds of expressions that cause issues with field notation, so we prevent using it in these cases.
   -/
   let obj := e.getArg! idx
+  --  `(2).fn` is unlikely to elaborate.
   if obj.isRawNatLit || obj.isAppOfArity ``OfNat.ofNat 3 || obj.isAppOfArity ``OfScientific.ofScientific 5 then
+    return none
+  -- `(?m).fn` is unlikely to elaborate. https://github.com/leanprover/lean4/issues/5993
+  -- We also exclude metavariable applications (these are delayed assignments for example)
+  if obj.getAppFn.isMVar then
     return none
   return (idx, field)
 
@@ -335,7 +348,7 @@ def delabAppExplicitCore (fieldNotation : Bool) (numArgs : Nat) (delabHead : (in
     if idx == 0 then
       -- If it's the first argument, then we can tag `obj.field` with the first app.
       head ← withBoundedAppFn (numArgs - 1) <| annotateTermInfo head
-    return Syntax.mkApp head (argStxs.eraseIdx idx)
+    return Syntax.mkApp head (argStxs.eraseIdxIfInBounds idx)
   else
     return Syntax.mkApp fnStx argStxs
 
@@ -573,7 +586,7 @@ def withOverApp (arity : Nat) (x : Delab) : Delab := do
   else
     let delabHead (insertExplicit : Bool) : Delab := do
       guard <| !insertExplicit
-      withAnnotateTermInfo x
+      withAnnotateTermInfoUnlessAnnotated x
     delabAppCore (n - arity) delabHead (unexpand := false)
 
 @[builtin_delab app]
@@ -862,7 +875,7 @@ def delabLam : Delab :=
           -- "default" binder group is the only one that expects binder names
           -- as a term, i.e. a single `Syntax.ident` or an application thereof
           let stxCurNames ←
-            if curNames.size > 1 then
+            if h : curNames.size > 1 then
               `($(curNames.get! 0) $(curNames.eraseIdx 0)*)
             else
               pure $ curNames.get! 0;
@@ -1089,19 +1102,30 @@ def coeDelaborator : Delab := whenPPOption getPPCoercions do
   let e ← getExpr
   let .const declName _ := e.getAppFn | failure
   let some info ← Meta.getCoeFnInfo? declName | failure
+  let n := e.getAppNumArgs
+  guard <| n ≥ info.numArgs
   if (← getPPOption getPPExplicit) && info.coercee != 0 then
     -- Approximation: the only implicit arguments come before the coercee
     failure
-  let n := e.getAppNumArgs
-  withOverApp info.numArgs do
-    match info.type with
-    | .coe => `(↑$(← withNaryArg info.coercee delab))
-    | .coeFun =>
-      if n = info.numArgs then
-        `(⇑$(← withNaryArg info.coercee delab))
+  if n == info.numArgs then
+    delabHead info 0 false
+  else
+    let nargs := n - info.numArgs
+    delabAppCore nargs (delabHead info nargs) (unexpand := false)
+where
+  delabHead (info : CoeFnInfo) (nargs : Nat) (insertExplicit : Bool) : Delab := do
+    withTypeAscription (cond := ← getPPOption getPPCoercionsTypes) do
+      guard <| !insertExplicit
+      if info.type == .coeFun && nargs > 0 then
+        -- In the CoeFun case, annotate with the coercee itself.
+        -- We can still see the whole coercion expression by hovering over the whitespace between the arguments.
+        withNaryArg info.coercee <| withAnnotateTermInfo delab
       else
-        withNaryArg info.coercee delab
-    | .coeSort => `(↥$(← withNaryArg info.coercee delab))
+        withAnnotateTermInfo do
+          match info.type with
+          | .coe     => `(↑$(← withNaryArg info.coercee delab))
+          | .coeFun  => `(⇑$(← withNaryArg info.coercee delab))
+          | .coeSort => `(↥$(← withNaryArg info.coercee delab))
 
 @[builtin_delab app.dite]
 def delabDIte : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation <| withOverApp 5 do
@@ -1261,6 +1285,35 @@ def delabNameMkStr : Delab := whenPPOption getPPNotation do
 
 @[builtin_delab app.Lean.Name.num]
 def delabNameMkNum : Delab := delabNameMkStr
+
+@[builtin_delab app.sorryAx]
+def delabSorry : Delab := whenPPOption getPPNotation <| whenNotPPOption getPPExplicit do
+  let numArgs := (← getExpr).getAppNumArgs
+  guard <| numArgs ≥ 2
+  -- Cache the current position's value, since it might be applied to the entire application.
+  let sorrySource ← getPPOption getPPSorrySource
+  -- If this is constructed by `Lean.Meta.mkLabeledSorry`, then normally we don't print the unique tag.
+  -- But, if `pp.explicit` is false and `pp.sorrySource` is true, then print a simplified version of the tag.
+  if let some view := isLabeledSorry? (← getExpr) then
+    withOverApp 3 do
+      if let some loc := view.module? then
+        let (stx, explicit) ←
+          if ← pure sorrySource <||> getPPOption getPPSorrySource then
+            let posAsName := Name.mkSimple s!"{loc.module}:{loc.range.pos.line}:{loc.range.pos.column}"
+            let pos := mkNode ``Lean.Parser.Term.quotedName #[Syntax.mkNameLit s!"`{posAsName}"]
+            let src ← withAppArg <| annotateTermInfo pos
+            pure (← `(sorry $src), true)
+          else
+            -- Set `explicit` to false so that the first hover sets `pp.sorrySource` to true in `Lean.Widget.ppExprTagged`
+            pure (← `(sorry), false)
+        let stx ← annotateCurPos stx
+        addDelabTermInfo (← getPos) stx (← getExpr) (explicit := explicit) (location? := loc)
+          (docString? := "This is a `sorry` term associated to a source position. Use 'Go to definition' to go there.")
+        return stx
+      else
+        `(sorry)
+  else
+    withOverApp 2 `(sorry)
 
 open Parser Command Term in
 @[run_builtin_parser_attribute_hooks]

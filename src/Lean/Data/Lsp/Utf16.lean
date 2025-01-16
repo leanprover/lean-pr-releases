@@ -6,7 +6,6 @@ Authors: Marc Huisinga, Wojciech Nawrocki
 -/
 prelude
 import Init.Data.String
-import Init.Data.Array
 import Lean.Data.Lsp.Basic
 import Lean.Data.Position
 import Lean.DeclarationRange
@@ -66,7 +65,7 @@ namespace FileMap
 
 private def lineStartPos (text : FileMap) (line : Nat) : String.Pos :=
   if h : line < text.positions.size then
-    text.positions.get ⟨line, h⟩
+    text.positions[line]
   else if text.positions.isEmpty then
     0
   else

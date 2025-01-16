@@ -272,12 +272,20 @@ macro nextTk:"next " args:binderIdent* arrowTk:" => " tac:tacticSeq : tactic =>
   -- Limit ref variability for incrementality; see Note [Incremental Macros]
   withRef arrowTk `(tactic| case%$nextTk _ $args* =>%$arrowTk $tac)
 
-/-- `all_goals tac` runs `tac` on each goal, concatenating the resulting goals, if any. -/
+/--
+`all_goals tac` runs `tac` on each goal, concatenating the resulting goals.
+If the tactic fails on any goal, the entire `all_goals` tactic fails.
+
+See also `any_goals tac`.
+-/
 syntax (name := allGoals) "all_goals " tacticSeq : tactic
 
 /--
-`any_goals tac` applies the tactic `tac` to every goal, and succeeds if at
-least one application succeeds.
+`any_goals tac` applies the tactic `tac` to every goal,
+concating the resulting goals for successful tactic applications.
+If the tactic fails on all of the goals, the entire `any_goals` tactic fails.
+
+This tactic is like `all_goals try tac` except that it fails if none of the applications of `tac` succeeds.
 -/
 syntax (name := anyGoals) "any_goals " tacticSeq : tactic
 
@@ -400,16 +408,18 @@ example (a b c d : Nat) : a + b + c + d = d + (b + c) + a := by ac_rfl
 syntax (name := acRfl) "ac_rfl" : tactic
 
 /--
-The `sorry` tactic closes the goal using `sorryAx`. This is intended for stubbing out incomplete
-parts of a proof while still having a syntactically correct proof skeleton. Lean will give
-a warning whenever a proof uses `sorry`, so you aren't likely to miss it, but
-you can double check if a theorem depends on `sorry` by using
-`#print axioms my_thm` and looking for `sorryAx` in the axiom list.
--/
-macro "sorry" : tactic => `(tactic| exact @sorryAx _ false)
+The `sorry` tactic is a temporary placeholder for an incomplete tactic proof,
+closing the main goal using `exact sorry`.
 
-/-- `admit` is a shorthand for `exact sorry`. -/
-macro "admit" : tactic => `(tactic| exact @sorryAx _ false)
+This is intended for stubbing-out incomplete parts of a proof while still having a syntactically correct proof skeleton.
+Lean will give a warning whenever a proof uses `sorry`, so you aren't likely to miss it,
+but you can double check if a theorem depends on `sorry` by looking for `sorryAx` in the output
+of the `#print axioms my_thm` command, the axiom used by the implementation of `sorry`.
+-/
+macro "sorry" : tactic => `(tactic| exact sorry)
+
+/-- `admit` is a synonym for `sorry`. -/
+macro "admit" : tactic => `(tactic| sorry)
 
 /--
 `infer_instance` is an abbreviation for `exact inferInstance`.
@@ -420,11 +430,11 @@ macro "infer_instance" : tactic => `(tactic| exact inferInstance)
 /--
 `+opt` is short for `(opt := true)`. It sets the `opt` configuration option to `true`.
 -/
-syntax posConfigItem := "+" noWs ident
+syntax posConfigItem := " +" noWs ident
 /--
 `-opt` is short for `(opt := false)`. It sets the `opt` configuration option to `false`.
 -/
-syntax negConfigItem := "-" noWs ident
+syntax negConfigItem := " -" noWs ident
 /--
 `(opt := val)` sets the `opt` configuration option to `val`.
 
@@ -458,7 +468,7 @@ hypotheses or the goal. It can have one of the forms:
 * `at h₁ h₂ ⊢`: target the hypotheses `h₁` and `h₂`, and the goal
 * `at *`: target all hypotheses and the goal
 -/
-syntax location := withPosition(" at" (locationWildcard <|> locationHyp))
+syntax location := withPosition(ppGroup(" at" (locationWildcard <|> locationHyp)))
 
 /--
 * `change tgt'` will change the goal from `tgt` to `tgt'`,
@@ -808,7 +818,7 @@ syntax inductionAlt  := ppDedent(ppLine) inductionAltLHS+ " => " (hole <|> synth
 After `with`, there is an optional tactic that runs on all branches, and
 then a list of alternatives.
 -/
-syntax inductionAlts := " with" (ppSpace colGt tactic)? withPosition((colGe inductionAlt)+)
+syntax inductionAlts := " with" (ppSpace colGt tactic)? withPosition((colGe inductionAlt)*)
 
 /--
 Assuming `x` is a variable in the local context with an inductive type,
@@ -982,13 +992,6 @@ and tries to clear the previous one.
 -/
 syntax (name := specialize) "specialize " term : tactic
 
-macro_rules | `(tactic| trivial) => `(tactic| assumption)
-macro_rules | `(tactic| trivial) => `(tactic| rfl)
-macro_rules | `(tactic| trivial) => `(tactic| contradiction)
-macro_rules | `(tactic| trivial) => `(tactic| decide)
-macro_rules | `(tactic| trivial) => `(tactic| apply True.intro)
-macro_rules | `(tactic| trivial) => `(tactic| apply And.intro <;> trivial)
-
 /--
 `unhygienic tacs` runs `tacs` with name hygiene disabled.
 This means that tactics that would normally create inaccessible names will instead
@@ -1149,6 +1152,123 @@ macro "haveI" d:haveDecl : tactic => `(tactic| refine_lift haveI $d:haveDecl; ?_
 macro "letI" d:haveDecl : tactic => `(tactic| refine_lift letI $d:haveDecl; ?_)
 
 /--
+Configuration for the `decide` tactic family.
+-/
+structure DecideConfig where
+  /-- If true (default: false), then use only kernel reduction when reducing the `Decidable` instance.
+  This is more efficient, since the default mode reduces twice (once in the elaborator and again in the kernel),
+  however kernel reduction ignores transparency settings. -/
+  kernel : Bool := false
+  /-- If true (default: false), then uses the native code compiler to evaluate the `Decidable` instance,
+  admitting the result via the axiom `Lean.ofReduceBool`.  This can be significantly more efficient,
+  but it is at the cost of increasing the trusted code base, namely the Lean compiler
+  and all definitions with an `@[implemented_by]` attribute.
+  The instance is only evaluated once. The `native_decide` tactic is a synonym for `decide +native`. -/
+  native : Bool := false
+  /-- If true (default: true), then when preprocessing the goal, do zeta reduction to attempt to eliminate free variables. -/
+  zetaReduce : Bool := true
+  /-- If true (default: false), then when preprocessing, removes irrelevant variables and reverts the local context.
+  A variable is *relevant* if it appears in the target, if it appears in a relevant variable,
+  or if it is a proposition that refers to a relevant variable. -/
+  revert : Bool := false
+
+/--
+`decide` attempts to prove the main goal (with target type `p`) by synthesizing an instance of `Decidable p`
+and then reducing that instance to evaluate the truth value of `p`.
+If it reduces to `isTrue h`, then `h` is a proof of `p` that closes the goal.
+
+The target is not allowed to contain local variables or metavariables.
+If there are local variables, you can first try using the `revert` tactic with these local variables to move them into the target,
+or you can use the `+revert` option, described below.
+
+Options:
+- `decide +revert` begins by reverting local variables that the target depends on,
+  after cleaning up the local context of irrelevant variables.
+  A variable is *relevant* if it appears in the target, if it appears in a relevant variable,
+  or if it is a proposition that refers to a relevant variable.
+- `decide +kernel` uses kernel for reduction instead of the elaborator.
+  It has two key properties: (1) since it uses the kernel, it ignores transparency and can unfold everything,
+  and (2) it reduces the `Decidable` instance only once instead of twice.
+- `decide +native` uses the native code compiler (`#eval`) to evaluate the `Decidable` instance,
+  admitting the result via the `Lean.ofReduceBool` axiom.
+  This can be significantly more efficient than using reduction, but it is at the cost of increasing the size
+  of the trusted code base.
+  Namely, it depends on the correctness of the Lean compiler and all definitions with an `@[implemented_by]` attribute.
+  Like with `+kernel`, the `Decidable` instance is evaluated only once.
+
+Limitation: In the default mode or `+kernel` mode, since `decide` uses reduction to evaluate the term,
+`Decidable` instances defined by well-founded recursion might not work because evaluating them requires reducing proofs.
+Reduction can also get stuck on `Decidable` instances with `Eq.rec` terms.
+These can appear in instances defined using tactics (such as `rw` and `simp`).
+To avoid this, create such instances using definitions such as `decidable_of_iff` instead.
+
+## Examples
+
+Proving inequalities:
+```lean
+example : 2 + 2 ≠ 5 := by decide
+```
+
+Trying to prove a false proposition:
+```lean
+example : 1 ≠ 1 := by decide
+/-
+tactic 'decide' proved that the proposition
+  1 ≠ 1
+is false
+-/
+```
+
+Trying to prove a proposition whose `Decidable` instance fails to reduce
+```lean
+opaque unknownProp : Prop
+
+open scoped Classical in
+example : unknownProp := by decide
+/-
+tactic 'decide' failed for proposition
+  unknownProp
+since its 'Decidable' instance reduced to
+  Classical.choice ⋯
+rather than to the 'isTrue' constructor.
+-/
+```
+
+## Properties and relations
+
+For equality goals for types with decidable equality, usually `rfl` can be used in place of `decide`.
+```lean
+example : 1 + 1 = 2 := by decide
+example : 1 + 1 = 2 := by rfl
+```
+-/
+syntax (name := decide) "decide" optConfig : tactic
+
+/--
+`native_decide` is a synonym for `decide +native`.
+It will attempt to prove a goal of type `p` by synthesizing an instance
+of `Decidable p` and then evaluating it to `isTrue ..`. Unlike `decide`, this
+uses `#eval` to evaluate the decidability instance.
+
+This should be used with care because it adds the entire lean compiler to the trusted
+part, and the axiom `Lean.ofReduceBool` will show up in `#print axioms` for theorems using
+this method or anything that transitively depends on them. Nevertheless, because it is
+compiled, this can be significantly more efficient than using `decide`, and for very
+large computations this is one way to run external programs and trust the result.
+```lean
+example : (List.range 1000).length = 1000 := by native_decide
+```
+-/
+syntax (name := nativeDecide) "native_decide" optConfig : tactic
+
+macro_rules | `(tactic| trivial) => `(tactic| assumption)
+macro_rules | `(tactic| trivial) => `(tactic| rfl)
+macro_rules | `(tactic| trivial) => `(tactic| contradiction)
+macro_rules | `(tactic| trivial) => `(tactic| decide)
+macro_rules | `(tactic| trivial) => `(tactic| apply True.intro)
+macro_rules | `(tactic| trivial) => `(tactic| apply And.intro <;> trivial)
+
+/--
 The `omega` tactic, for resolving integer and natural linear arithmetic problems.
 
 It is not yet a full decision procedure (no "dark" or "grey" shadows),
@@ -1191,7 +1311,7 @@ macro "bv_omega" : tactic => `(tactic| (try simp only [bv_toNat] at *) <;> omega
 syntax (name := acNf0) "ac_nf0" (location)? : tactic
 
 /-- Implementation of `norm_cast` (the full `norm_cast` calls `trivial` afterwards). -/
-syntax (name := normCast0) "norm_cast0" (location)? : tactic
+syntax (name := normCast0) "norm_cast0" optConfig (location)? : tactic
 
 /-- `assumption_mod_cast` is a variant of `assumption` that solves the goal
 using a hypothesis. Unlike `assumption`, it first pre-processes the goal and
@@ -1200,7 +1320,7 @@ in more situations.
 
 Concretely, it runs `norm_cast` on the goal. For each local hypothesis `h`, it also
 normalizes `h` with `norm_cast` and tries to use that to close the goal. -/
-macro "assumption_mod_cast" : tactic => `(tactic| norm_cast0 at * <;> assumption)
+macro "assumption_mod_cast" cfg:optConfig : tactic => `(tactic| norm_cast0 $cfg at * <;> assumption)
 
 /--
 The `norm_cast` family of tactics is used to normalize certain coercions (*casts*) in expressions.
@@ -1237,26 +1357,9 @@ their operation, to make them more flexible about the expressions they accept
 
 See also `push_cast`, which moves casts inwards rather than lifting them outwards.
 -/
-macro "norm_cast" loc:(location)? : tactic =>
-  `(tactic| norm_cast0 $[$loc]? <;> try trivial)
+macro "norm_cast" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| norm_cast0 $cfg $[$loc]? <;> try trivial)
 
-/--
-`ac_nf` normalizes equalities up to application of an associative and commutative operator.
-- `ac_nf` normalizes all hypotheses and the goal target of the goal.
-- `ac_nf at l` normalizes at location(s) `l`, where `l` is either `*` or a
-  list of hypotheses in the local context. In the latter case, a turnstile `⊢` or `|-`
-  can also be used, to signify the target of the goal.
-```
-instance : Associative (α := Nat) (.+.) := ⟨Nat.add_assoc⟩
-instance : Commutative (α := Nat) (.+.) := ⟨Nat.add_comm⟩
-
-example (a b c d : Nat) : a + b + c + d = d + (b + c) + a := by
- ac_nf
- -- goal: a + (b + (c + d)) = a + (b + (c + d))
-```
--/
-macro "ac_nf" loc:(location)? : tactic =>
-  `(tactic| ac_nf0 $[$loc]? <;> try trivial)
 
 /--
 `push_cast` rewrites the goal to move certain coercions (*casts*) inward, toward the leaf nodes.
@@ -1298,6 +1401,24 @@ syntax (name := pushCast) "push_cast" optConfig (discharger)? (&" only")?
 `norm_cast_add_elim foo` registers `foo` as an elim-lemma in `norm_cast`.
 -/
 syntax (name := normCastAddElim) "norm_cast_add_elim" ident : command
+
+/--
+`ac_nf` normalizes equalities up to application of an associative and commutative operator.
+- `ac_nf` normalizes all hypotheses and the goal target of the goal.
+- `ac_nf at l` normalizes at location(s) `l`, where `l` is either `*` or a
+  list of hypotheses in the local context. In the latter case, a turnstile `⊢` or `|-`
+  can also be used, to signify the target of the goal.
+```
+instance : Associative (α := Nat) (.+.) := ⟨Nat.add_assoc⟩
+instance : Commutative (α := Nat) (.+.) := ⟨Nat.add_comm⟩
+
+example (a b c d : Nat) : a + b + c + d = d + (b + c) + a := by
+ ac_nf
+ -- goal: a + (b + (c + d)) = a + (b + (c + d))
+```
+-/
+macro "ac_nf" loc:(location)? : tactic =>
+  `(tactic| ac_nf0 $[$loc]? <;> try trivial)
 
 /--
 * `symm` applies to a goal whose target has the form `t ~ u` where `~` is a symmetric relation,

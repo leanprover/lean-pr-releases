@@ -91,7 +91,7 @@ inductive MessageData where
   If the thunked message is produced for a term that contains a synthetic sorry,
   `hasSyntheticSorry` should return `true`.
   This is used to filter out certain messages. -/
-  | ofLazy (f : Option PPContext → IO Dynamic) (hasSyntheticSorry : MetavarContext → Bool)
+  | ofLazy (f : Option PPContext → BaseIO Dynamic) (hasSyntheticSorry : MetavarContext → Bool)
   deriving Inhabited, TypeName
 
 namespace MessageData
@@ -103,7 +103,7 @@ def ofFormat (fmt : Format) : MessageData := .ofFormatWithInfos ⟨fmt, .empty�
 Lazy message data production, with access to the context as given by
 a surrounding `MessageData.withContext` (which is expected to exist).
 -/
-def lazy (f : PPContext → IO MessageData)
+def lazy (f : PPContext → BaseIO MessageData)
     (hasSyntheticSorry : MetavarContext → Bool := fun _ => false) : MessageData :=
   .ofLazy (hasSyntheticSorry := hasSyntheticSorry) fun ctx? => do
     let msg ← match ctx? with
@@ -116,7 +116,7 @@ variable (p : Name → Bool) in
 /-- Returns true when the message contains a `MessageData.tagged tag ..` constructor where `p tag`
 is true.
 
-This does not descend into lazily generated subtress (`.ofLazy`); message tags
+This does not descend into lazily generated subtrees (`.ofLazy`); message tags
 of interest (like those added by `logLinter`) are expected to be near the root
 of the `MessageData`, and not hidden inside `.ofLazy`.
 -/
@@ -129,6 +129,19 @@ partial def hasTag : MessageData → Bool
   | tagged n msg            => p n || hasTag msg
   | trace data msg msgs     => p data.cls || hasTag msg || msgs.any hasTag
   | _                       => false
+
+/--
+Returns the top-level tag of the message.
+If none, returns `Name.anonymous`.
+
+This does not descend into message subtrees (e.g., `.compose`, `.ofLazy`).
+The message kind is expected to describe the whole message.
+-/
+def kind : MessageData → Name
+  | withContext _ msg       => kind msg
+  | withNamingContext _ msg => kind msg
+  | tagged n _              => n
+  | _                       => .anonymous
 
 /-- An empty message. -/
 def nil : MessageData :=
@@ -207,9 +220,9 @@ where
   | trace _ msg msgs        => visit mctx? msg || msgs.any (visit mctx?)
   | _                       => false
 
-partial def formatAux : NamingContext → Option MessageDataContext → MessageData → IO Format
-  | _, _,            ofFormatWithInfos fmt    => return fmt.1
-  | _,    none,      ofGoal mvarId            => return "goal " ++ format (mkMVar mvarId)
+partial def formatAux : NamingContext → Option MessageDataContext → MessageData → BaseIO Format
+  | _,    _,         ofFormatWithInfos fmt    => return fmt.1
+  | _,    none,      ofGoal mvarId            => return formatRawGoal mvarId
   | nCtx, some ctx,  ofGoal mvarId            => ppGoal (mkPPContext nCtx ctx) mvarId
   | nCtx, ctx,       ofWidget _ d             => formatAux nCtx ctx d
   | nCtx, _,         withContext ctx d        => formatAux nCtx ctx d
@@ -231,10 +244,10 @@ partial def formatAux : NamingContext → Option MessageDataContext → MessageD
       | panic! s!"MessageData.ofLazy: expected MessageData in Dynamic, got {dyn.typeName}"
     formatAux nCtx ctx? msg
 
-protected def format (msgData : MessageData) : IO Format :=
-  formatAux { currNamespace := Name.anonymous, openDecls := [] } none msgData
+protected def format (msgData : MessageData) (ctx? : Option MessageDataContext := none) : BaseIO Format :=
+  formatAux { currNamespace := Name.anonymous, openDecls := [] } ctx? msgData
 
-protected def toString (msgData : MessageData) : IO String := do
+protected def toString (msgData : MessageData) : BaseIO String := do
   return toString (← msgData.format)
 
 instance : Append MessageData := ⟨compose⟩
@@ -250,7 +263,7 @@ instance : Coe (Option Expr) MessageData := ⟨fun o => match o with | none => "
 
 partial def arrayExpr.toMessageData (es : Array Expr) (i : Nat) (acc : MessageData) : MessageData :=
   if h : i < es.size then
-    let e   := es.get ⟨i, h⟩;
+    let e   := es[i];
     let acc := if i == 0 then acc ++ ofExpr e else acc ++ ", " ++ ofExpr e;
     toMessageData es (i+1) acc
   else
@@ -315,7 +328,7 @@ structure BaseMessage (α : Type u) where
   endPos        : Option Position := none
   /-- If `true`, report range as given; see `msgToInteractiveDiagnostic`. -/
   keepFullRange : Bool := false
-  severity      : MessageSeverity := MessageSeverity.error
+  severity      : MessageSeverity := .error
   caption       : String          := ""
   /-- The content of the message. -/
   data          : α
@@ -328,7 +341,10 @@ abbrev Message := BaseMessage MessageData
 /-- A `SerialMessage` is a `Message` whose `MessageData` has been eagerly
 serialized and is thus appropriate for use in pure contexts where the effectful
 `MessageData.toString` cannot be used. -/
-abbrev SerialMessage := BaseMessage String
+structure SerialMessage extends BaseMessage String where
+  /-- The message kind (i.e., the top-level tag). -/
+  kind          : Name
+  deriving ToJson, FromJson
 
 namespace SerialMessage
 
@@ -354,14 +370,18 @@ end SerialMessage
 
 namespace Message
 
-@[inline] def serialize (msg : Message) : IO SerialMessage := do
-  return {msg with data := ← msg.data.toString}
+@[inherit_doc MessageData.kind] abbrev kind (msg : Message) :=
+  msg.data.kind
 
-protected def toString (msg : Message) (includeEndPos := false) : IO String := do
+/-- Serializes the message, converting its data into a string and saving its kind. -/
+@[inline] def serialize (msg : Message) : BaseIO SerialMessage := do
+  return {msg with kind := msg.kind, data := ← msg.data.toString}
+
+protected def toString (msg : Message) (includeEndPos := false) : BaseIO String := do
   -- Remark: The inline here avoids a new message allocation when `msg` is shared
   return inline <| (← msg.serialize).toString includeEndPos
 
-protected def toJson (msg : Message) : IO Json := do
+protected def toJson (msg : Message) : BaseIO Json := do
   -- Remark: The inline here avoids a new message allocation when `msg` is shared
   return inline <| toJson (← msg.serialize)
 
@@ -371,23 +391,14 @@ end Message
 A persistent array of messages.
 
 In the Lean elaborator, we use a fresh message log per command but may also report diagnostics at
-various points inside a command, which will empty `unreported` and updated `hadErrors` accordingly
-(see `CoreM.getAndEmptyMessageLog`).
+various points inside a command, which will empty `unreported` and move its messages to `reported`.
+Reported messages are preserved for some specific "lookback" operations such as `hasError` that
+should consider the entire message history of the current command; most other functions such as
+`add` and `toList` will only operate on unreported messages.
 -/
 structure MessageLog where
-  /--
-  If true, there was an error in the log previously that has already been reported to the user and
-  removed from the log. Thus we say that in the current context (usually the current command), we
-  "have errors" if either this flag is set or there is an error in `msgs`; see
-  `MessageLog.hasErrors`. If we have errors, we suppress some error messages that are often the
-  result of a previous error.
-  -/
-  /-
-  Design note: We considered introducing a `hasErrors` field instead that already includes the
-  presence of errors in `msgs` but this would not be compatible with e.g.
-  `MessageLog.errorsToWarnings`.
-  -/
-  hadErrors : Bool := false
+  /-- The list of messages already reported (i.e. saved in a `Snapshot`), in insertion order. -/
+  reported : PersistentArray Message := {}
   /-- The list of messages not already reported, in insertion order. -/
   unreported : PersistentArray Message := {}
   /--
@@ -396,7 +407,7 @@ structure MessageLog where
   the configuration option `exponentiation.threshold`.
   We don't produce a warning if the kind is already in the following set.
   -/
-  reportedKinds : NameSet := {}
+  loggedKinds : NameSet := {}
   deriving Inhabited
 
 namespace MessageLog
@@ -406,20 +417,33 @@ def empty : MessageLog := {}
 using `MessageLog.toList/toArray`" (since := "2024-05-22")]
 def msgs : MessageLog → PersistentArray Message := unreported
 
+def reportedPlusUnreported : MessageLog → PersistentArray Message
+  | { reported := r, unreported := u, .. } => r ++ u
+
 def hasUnreported (log : MessageLog) : Bool :=
   !log.unreported.isEmpty
 
 def add (msg : Message) (log : MessageLog) : MessageLog :=
   { log with unreported := log.unreported.push msg }
 
-protected def append (l₁ l₂ : MessageLog) : MessageLog :=
-  { hadErrors := l₁.hadErrors || l₂.hadErrors, unreported := l₁.unreported ++ l₂.unreported }
+protected def append (l₁ l₂ : MessageLog) : MessageLog where
+  reported := l₁.reported ++ l₂.reported
+  unreported := l₁.unreported ++ l₂.unreported
+  loggedKinds := l₁.loggedKinds.union l₂.loggedKinds
 
 instance : Append MessageLog :=
   ⟨MessageLog.append⟩
 
+/--
+Checks if either of `reported` or `unreported` contains an error, i.e. whether the current command
+has errored yet.
+-/
 def hasErrors (log : MessageLog) : Bool :=
-  log.hadErrors || log.unreported.any (·.severity matches .error)
+  log.reported.any (·.severity matches .error) || log.unreported.any (·.severity matches .error)
+
+/-- Moves `unreported` messages to `reported`. -/
+def markAllReported (log : MessageLog) : MessageLog :=
+  { log with unreported := {}, reported := log.reported ++ log.unreported }
 
 def errorsToWarnings (log : MessageLog) : MessageLog :=
   { unreported := log.unreported.map (fun m => match m.severity with | MessageSeverity.error => { m with severity := MessageSeverity.warning } | _ => m) }

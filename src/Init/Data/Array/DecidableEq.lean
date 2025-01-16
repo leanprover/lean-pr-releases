@@ -6,7 +6,6 @@ Authors: Leonardo de Moura
 prelude
 import Init.Data.Array.Basic
 import Init.Data.BEq
-import Init.Data.Nat.Lemmas
 import Init.Data.List.Nat.BEq
 import Init.ByCases
 
@@ -43,7 +42,7 @@ theorem rel_of_isEqv {r : α → α → Bool} {a b : Array α} :
   · exact fun h' => ⟨h, fun i => rel_of_isEqvAux h (Nat.le_refl ..) h'⟩
   · intro; contradiction
 
-theorem isEqv_iff_rel (a b : Array α) (r) :
+theorem isEqv_iff_rel {a b : Array α} {r} :
     Array.isEqv a b r ↔ ∃ h : a.size = b.size, ∀ (i : Nat) (h' : i < a.size), r (a[i]) (b[i]'(h ▸ h')) :=
   ⟨rel_of_isEqv, fun ⟨h, w⟩ => by
     simp only [isEqv, ← h, ↓reduceDIte]

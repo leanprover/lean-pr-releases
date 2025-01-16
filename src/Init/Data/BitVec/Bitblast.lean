@@ -76,7 +76,7 @@ to prove the correctness of the circuit that is built by `bv_decide`.
 def blastMul (aig : AIG BVBit) (input : AIG.BinaryRefVec aig w) : AIG.RefVecEntry BVBit w
 theorem denote_blastMul (aig : AIG BVBit) (lhs rhs : BitVec w) (assign : Assignment) :
    ...
-   ⟦(blastMul aig input).aig, (blastMul aig input).vec.get idx hidx, assign.toAIGAssignment⟧
+   ⟦(blastMul aig input).aig, (blastMul aig input).vec[idx], assign.toAIGAssignment⟧
      =
    (lhs * rhs).getLsbD idx
 ```
@@ -180,7 +180,7 @@ theorem carry_succ_one (i : Nat) (x : BitVec w) (h : 0 < w) :
   | zero => simp [carry_succ, h]
   | succ i ih =>
     rw [carry_succ, ih]
-    simp only [getLsbD_one, add_one_ne_zero, decide_False, Bool.and_false, atLeastTwo_false_mid]
+    simp only [getLsbD_one, add_one_ne_zero, decide_false, Bool.and_false, atLeastTwo_false_mid]
     cases hx : x.getLsbD (i+1)
     case false =>
       have : ∃ j ≤ i + 1, x.getLsbD j = false :=
@@ -249,7 +249,7 @@ theorem getLsbD_add_add_bool {i : Nat} (i_lt : i < w) (x y : BitVec w) (c : Bool
     [ Nat.testBit_mod_two_pow,
       Nat.testBit_mul_two_pow_add_eq,
       i_lt,
-      decide_True,
+      decide_true,
       Bool.true_and,
       Nat.add_assoc,
       Nat.add_left_comm (_%_) (_ * _) _,
@@ -346,6 +346,10 @@ theorem getMsbD_sub {i : Nat} {i_lt : i < w} {x y : BitVec w} :
   · rfl
   · omega
 
+theorem getElem_sub {i : Nat} {x y : BitVec w} (h : i < w) :
+    (x - y)[i] = (x[i] ^^ ((~~~y + 1#w)[i] ^^ carry i x (~~~y + 1#w) false)) := by
+  simp [← getLsbD_eq_getElem, getLsbD_sub, h]
+
 theorem msb_sub {x y: BitVec w} :
     (x - y).msb
       = (x.msb ^^ ((~~~y + 1#w).msb ^^ carry (w - 1 - 0) x (~~~y + 1#w) false)) := by
@@ -392,7 +396,7 @@ theorem getLsbD_neg {i : Nat} {x : BitVec w} :
   by_cases hi : i < w
   · rw [getLsbD_add hi]
     have : 0 < w := by omega
-    simp only [getLsbD_not, hi, decide_True, Bool.true_and, getLsbD_one, this, not_bne,
+    simp only [getLsbD_not, hi, decide_true, Bool.true_and, getLsbD_one, this, not_bne,
       _root_.true_and, not_eq_eq_eq_not]
     cases i with
     | zero =>
@@ -401,14 +405,18 @@ theorem getLsbD_neg {i : Nat} {x : BitVec w} :
       simp [hi, carry_zero]
     | succ =>
       rw [carry_succ_one _ _ (by omega), ← Bool.xor_not, ← decide_not]
-      simp only [add_one_ne_zero, decide_False, getLsbD_not, and_eq_true, decide_eq_true_eq,
+      simp only [add_one_ne_zero, decide_false, getLsbD_not, and_eq_true, decide_eq_true_eq,
         not_eq_eq_eq_not, Bool.not_true, false_bne, not_exists, _root_.not_and, not_eq_true,
-        bne_left_inj, decide_eq_decide]
+        bne_right_inj, decide_eq_decide]
       constructor
       · rintro h j hj; exact And.right <| h j (by omega)
       · rintro h j hj; exact ⟨by omega, h j (by omega)⟩
   · have h_ge : w ≤ i := by omega
     simp [getLsbD_ge _ _ h_ge, h_ge, hi]
+
+theorem getElem_neg {i : Nat} {x : BitVec w} (h : i < w) :
+    (-x)[i] = (x[i] ^^ decide (∃ j < i, x.getLsbD j = true)) := by
+  simp [← getLsbD_eq_getElem, getLsbD_neg, h]
 
 theorem getMsbD_neg {i : Nat} {x : BitVec w} :
     getMsbD (-x) i =
@@ -419,7 +427,7 @@ theorem getMsbD_neg {i : Nat} {x : BitVec w} :
     simp [hi]; omega
   case pos =>
     have h₁ : w - 1 - i < w := by omega
-    simp only [hi, decide_True, h₁, Bool.true_and, Bool.bne_left_inj, decide_eq_decide]
+    simp only [hi, decide_true, h₁, Bool.true_and, Bool.bne_right_inj, decide_eq_decide]
     constructor
     · rintro ⟨j, hj, h⟩
       refine ⟨w - 1 - j, by omega, by omega, by omega, _root_.cast ?_ h⟩
@@ -454,15 +462,15 @@ theorem msb_neg {w : Nat} {x : BitVec w} :
       case true =>
         apply hmin
         apply eq_of_getMsbD_eq
-        rintro ⟨i, hi⟩
-        simp only [getMsbD_intMin, w_pos, decide_True, Bool.true_and]
+        intro i hi
+        simp only [getMsbD_intMin, w_pos, decide_true, Bool.true_and]
         cases i
         case zero => exact hmsb
         case succ => exact getMsbD_x _ hi (by omega)
       case false =>
         apply hzero
         apply eq_of_getMsbD_eq
-        rintro ⟨i, hi⟩
+        intro i hi
         simp only [getMsbD_zero]
         cases i
         case zero => exact hmsb
@@ -476,7 +484,7 @@ theorem msb_abs {w : Nat} {x : BitVec w} :
   by_cases h₀ : 0 < w
   · by_cases h₁ : x = intMin w
     · simp [h₁, msb_intMin]
-    · simp only [neg_eq, h₁, decide_False]
+    · simp only [neg_eq, h₁, decide_false]
       by_cases h₂ : x.msb
       · simp [h₂, msb_neg]
         and_intros
@@ -565,19 +573,19 @@ theorem setWidth_setWidth_succ_eq_setWidth_setWidth_add_twoPow (x : BitVec w) (i
     setWidth w (x.setWidth (i + 1)) =
       setWidth w (x.setWidth i) + (x &&& twoPow w i) := by
   rw [add_eq_or_of_and_eq_zero]
-  · ext k
-    simp only [getLsbD_setWidth, Fin.is_lt, decide_True, Bool.true_and, getLsbD_or, getLsbD_and]
+  · ext k h
+    simp only [getLsbD_setWidth, h, decide_true, Bool.true_and, getLsbD_or, getLsbD_and]
     by_cases hik : i = k
     · subst hik
-      simp
-    · simp only [getLsbD_twoPow, hik, decide_False, Bool.and_false, Bool.or_false]
+      simp [h]
+    · simp only [getLsbD_twoPow, hik, decide_false, Bool.and_false, Bool.or_false]
       by_cases hik' : k < (i + 1)
       · have hik'' : k < i := by omega
         simp [hik', hik'']
       · have hik'' : ¬ (k < i) := by omega
         simp [hik', hik'']
   · ext k
-    simp only [and_twoPow, getLsbD_and, getLsbD_setWidth, Fin.is_lt, decide_True, Bool.true_and,
+    simp only [and_twoPow, getLsbD_and, getLsbD_setWidth, Fin.is_lt, decide_true, Bool.true_and,
       getLsbD_zero, and_eq_false_imp, and_eq_true, decide_eq_true_eq, and_imp]
     by_cases hi : x.getLsbD i <;> simp [hi] <;> omega
 
@@ -1092,8 +1100,8 @@ def sshiftRightRec (x : BitVec w₁) (y : BitVec w₂) (n : Nat) : BitVec w₁ :
 
 @[simp]
 theorem sshiftRightRec_zero_eq (x : BitVec w₁) (y : BitVec w₂) :
-    sshiftRightRec x y 0 = x.sshiftRight' (y &&& 1#w₂) := by
-  simp only [sshiftRightRec, twoPow_zero]
+    sshiftRightRec x y 0 = x.sshiftRight' (y &&& twoPow w₂ 0) := by
+  simp only [sshiftRightRec]
 
 @[simp]
 theorem sshiftRightRec_succ_eq (x : BitVec w₁) (y : BitVec w₂) (n : Nat) :
