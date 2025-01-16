@@ -469,9 +469,9 @@ def addDeclCore (env : Environment) (maxHeartbeats : USize) (decl : @& Declarati
     (cancelTk? : @& Option IO.CancelToken) (doCheck := true) :
     Except Kernel.Exception Environment := do
   if let some ctx := env.asyncCtx? then
-    if decl.getNames.any (!ctx.mayContain ·) then
-      throw <| .other s!"cannot add declaration {decl.getNames} to environment as it is \
-        restricted to the prefix {ctx.declPrefix}"
+    if let some n := decl.getNames.find? (!ctx.mayContain ·) then
+      throw <| .other s!"cannot add declaration {n} to environment as it is restricted to the \
+        prefix {ctx.declPrefix}"
   if doCheck then
     addDeclCheck env maxHeartbeats decl cancelTk?
   else
@@ -485,9 +485,10 @@ def constants (env : Environment) : ConstMap :=
 def const2ModIdx (env : Environment) : Std.HashMap Name ModuleIdx :=
   env.toKernelEnv.const2ModIdx
 
-@[export lean_elab_environment_add]
-private def add (env : Environment) (cinfo : ConstantInfo) : Environment :=
-  { env with checkedWithoutAsync := env.checkedWithoutAsync.add cinfo }
+-- only needed for the lakefile.lean cache
+@[export lake_environment_add]
+private def lakeAdd (env : Environment) (cinfo : ConstantInfo) : Environment :=
+  { env with checked := .pure <| env.checked.get.add cinfo }
 
 /--
 Save an extra constant name that is used to populate `const2ModIdx` when we import
@@ -615,7 +616,7 @@ def addConstAsync (env : Environment) (constName : Name) (kind : ConstantKind) (
       asyncConsts := env.asyncConsts.add asyncConst
       checked := checkedEnvPromise.result }
     asyncEnv := { env with
-      asyncCtx? := some { declPrefix := privateToUserName constName }
+      asyncCtx? := some { declPrefix := privateToUserName constName.eraseMacroScopes }
     }
     sigPromise, infoPromise, extensionsPromise, checkedEnvPromise
   }
