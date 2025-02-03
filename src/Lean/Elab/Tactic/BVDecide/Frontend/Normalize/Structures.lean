@@ -114,17 +114,16 @@ where
 
   constInteresting (n : Name) : M Bool := do
     let env ← getEnv
-    if isStructure env n then
-      let constInfo ← getConstInfoInduct n
-      if constInfo.isRec then
-        return false
+    if !isStructure env n then
+      return false
+    let constInfo ← getConstInfoInduct n
+    if constInfo.isRec then
+      return false
 
-      let ctorTyp := (← getConstInfoCtor constInfo.ctors.head!).type
-      let analyzer state arg := do
-        return state || (← typeInteresting (← arg.fvarId!.getType))
-      forallTelescope ctorTyp fun args _ => args.foldlM (init := false) analyzer
-    else
-       isEnumType n
+    let ctorTyp := (← getConstInfoCtor constInfo.ctors.head!).type
+    let analyzer state arg := do
+      return state || (← typeInteresting (← arg.fvarId!.getType))
+    forallTelescope ctorTyp fun args _ => args.foldlM (init := false) analyzer
 
   typeInteresting (expr : Expr) : M Bool := do
     match_expr expr with

@@ -13,6 +13,7 @@ import Lean.Elab.Tactic.BVDecide.Frontend.Normalize.EmbeddedConstraint
 import Lean.Elab.Tactic.BVDecide.Frontend.Normalize.AC
 import Lean.Elab.Tactic.BVDecide.Frontend.Normalize.Structures
 import Lean.Elab.Tactic.BVDecide.Frontend.Normalize.IntToBitVec
+import Lean.Elab.Tactic.BVDecide.Frontend.Normalize.Enums
 
 /-!
 This module contains the implementation of `bv_normalize`, the preprocessing tactic for `bv_decide`.
@@ -57,6 +58,10 @@ where
 
     if cfg.fixedInt then
       let some g' ← intToBitVecPass.run g | return none
+      g := g'
+
+    if cfg.enums then
+      let some g' ← enumsPass.run g | return none
       g := g'
 
     trace[Meta.Tactic.bv] m!"Running fixpoint pipeline on:\n{g}"
