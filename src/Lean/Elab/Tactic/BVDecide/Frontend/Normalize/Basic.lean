@@ -16,17 +16,30 @@ namespace Frontend.Normalize
 
 open Lean.Meta
 
+/--
+Contains a cache for interesting and uninteresting types such that we don't duplicate work in the
+structures pass.
+-/
+structure InterestingStructures where
+  interesting : Std.HashSet Name := {}
+  uninteresting : Std.HashSet Name := {}
+
 structure PreProcessState where
   /--
   Contains `FVarId` that we already know are in `bv_normalize` simp normal form and thus don't
   need to be processed again when we visit the next time.
   -/
   rewriteCache : Std.HashSet FVarId := {}
+  /--
+  Analysis results for the structure pass if required.
+  -/
+  structuresAnalysis : InterestingStructures := {}
 
 abbrev PreProcessM : Type → Type := ReaderT BVDecideConfig <| StateRefT PreProcessState MetaM
 
 namespace PreProcessM
 
+@[inline]
 def getConfig : PreProcessM BVDecideConfig := read
 
 @[inline]
@@ -36,6 +49,34 @@ def checkRewritten (fvar : FVarId) : PreProcessM Bool := do
 @[inline]
 def rewriteFinished (fvar : FVarId) : PreProcessM Unit := do
   modify (fun s => { s with rewriteCache := s.rewriteCache.insert fvar })
+
+@[inline]
+def getStructureAnalysis : PreProcessM InterestingStructures := do
+  return (← get).structuresAnalysis
+
+@[inline]
+def lookupInterestingStructure (n : Name) : PreProcessM (Option Bool) := do
+  let s ← getStructureAnalysis
+  if s.uninteresting.contains n then
+    return some false
+  else if s.interesting.contains n then
+    return some true
+  else
+    return none
+
+@[inline]
+def modifyStructureAnalysis (f : InterestingStructures → InterestingStructures) :
+    PreProcessM Unit := do
+  modify fun s => { s with structuresAnalysis := f s.structuresAnalysis }
+
+@[inline]
+def markInterestingStructure (n : Name) : PreProcessM Unit := do
+  modifyStructureAnalysis (fun s => { s with interesting := s.interesting.insert n })
+
+@[inline]
+def markUninterestingStructure (n : Name) : PreProcessM Unit := do
+  modifyStructureAnalysis (fun s => { s with uninteresting := s.uninteresting.insert n })
+
 
 def run (cfg : BVDecideConfig) (goal : MVarId) (x : PreProcessM α) : MetaM α := do
   let hyps ← goal.withContext do getPropHyps
