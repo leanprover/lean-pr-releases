@@ -29,30 +29,32 @@ where
         if !decl.isLet && !decl.isImplementationDetail then
           discard <| typeInteresting decl.type
 
-  constInterestingCached (n : Name) : PreProcessM Bool := do
-    if let some cached ← PreProcessM.lookupInterestingStructure n then
-      return cached
+  constInteresting (n : Name) : PreProcessM Bool := do
+    let analysis ← PreProcessM.getTypeAnalysis
+    if analysis.interestingStructures.contains n || analysis.interestingEnums.contains n then
+      return true
+    else if analysis.uninteresting.contains n then
+      return false
 
-    let interesting ← constInteresting n
-    if interesting then
-      PreProcessM.markInterestingStructure n
+    let env ← getEnv
+    if isStructure env n then
+      let constInfo ← getConstInfoInduct n
+      if constInfo.isRec then
+        PreProcessM.markUninterestingType n
+        return false
+
+      let ctorTyp := (← getConstInfoCtor constInfo.ctors.head!).type
+      let analyzer state arg := do return state || (← typeInteresting (← arg.fvarId!.getType))
+      let interesting ← forallTelescope ctorTyp fun args _ => args.foldlM (init := false) analyzer
+      if interesting then
+        PreProcessM.markInterestingStructure n
+      return interesting
+    else if ← isEnumType n then
+      PreProcessM.markInterestingEnum n
       return true
     else
-      PreProcessM.markUninterestingStructure n
+      PreProcessM.markUninterestingType n
       return false
-
-  constInteresting (n : Name) : PreProcessM Bool := do
-    let env ← getEnv
-    if !isStructure env n then
-      return false
-    let constInfo ← getConstInfoInduct n
-    if constInfo.isRec then
-      return false
-
-    let ctorTyp := (← getConstInfoCtor constInfo.ctors.head!).type
-    let analyzer state arg := do
-      return state || (← typeInteresting (← arg.fvarId!.getType))
-    forallTelescope ctorTyp fun args _ => args.foldlM (init := false) analyzer
 
   typeInteresting (expr : Expr) : PreProcessM Bool := do
     match_expr expr with
@@ -65,7 +67,7 @@ where
     | Bool => return true
     | _ =>
       let some const := expr.getAppFn.constName? | return false
-      constInterestingCached const
+      constInteresting const
 
 end Frontend.Normalize
 end Lean.Elab.Tactic.BVDecide

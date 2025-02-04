@@ -17,11 +17,20 @@ namespace Frontend.Normalize
 open Lean.Meta
 
 /--
-Contains a cache for interesting and uninteresting types such that we don't duplicate work in the
-structures pass.
+Contains the result of the type analysis to be used in the structures and enums pass.
 -/
-structure InterestingStructures where
-  interesting : Std.HashSet Name := {}
+structure TypeAnalysis where
+  /--
+  Structures that are interesting for the structures pass.
+  -/
+  interestingStructures : Std.HashSet Name := {}
+  /--
+  Inductives enums that are interesting for the enums pass.
+  -/
+  interestingEnums : Std.HashSet Name := {}
+  /--
+  Other types that we've seen that are not interesting, currently only used as a cache.
+  -/
   uninteresting : Std.HashSet Name := {}
 
 structure PreProcessState where
@@ -31,9 +40,9 @@ structure PreProcessState where
   -/
   rewriteCache : Std.HashSet FVarId := {}
   /--
-  Analysis results for the structure pass if required.
+  Analysis results for the structure and enum pass if required.
   -/
-  structuresAnalysis : InterestingStructures := {}
+  typeAnalysis : TypeAnalysis := {}
 
 abbrev PreProcessM : Type → Type := ReaderT BVDecideConfig <| StateRefT PreProcessState MetaM
 
@@ -51,33 +60,37 @@ def rewriteFinished (fvar : FVarId) : PreProcessM Unit := do
   modify (fun s => { s with rewriteCache := s.rewriteCache.insert fvar })
 
 @[inline]
-def getStructureAnalysis : PreProcessM InterestingStructures := do
-  return (← get).structuresAnalysis
+def getTypeAnalysis : PreProcessM TypeAnalysis := do
+  return (← get).typeAnalysis
 
 @[inline]
 def lookupInterestingStructure (n : Name) : PreProcessM (Option Bool) := do
-  let s ← getStructureAnalysis
+  let s ← getTypeAnalysis
   if s.uninteresting.contains n then
     return some false
-  else if s.interesting.contains n then
+  else if s.interestingStructures.contains n then
     return some true
   else
     return none
 
 @[inline]
-def modifyStructureAnalysis (f : InterestingStructures → InterestingStructures) :
+def modifyTypeAnalysis (f : TypeAnalysis → TypeAnalysis) :
     PreProcessM Unit := do
-  modify fun s => { s with structuresAnalysis := f s.structuresAnalysis }
+  modify fun s => { s with typeAnalysis := f s.typeAnalysis }
 
 @[inline]
 def markInterestingStructure (n : Name) : PreProcessM Unit := do
-  modifyStructureAnalysis (fun s => { s with interesting := s.interesting.insert n })
+  modifyTypeAnalysis (fun s => { s with interestingStructures := s.interestingStructures.insert n })
 
 @[inline]
-def markUninterestingStructure (n : Name) : PreProcessM Unit := do
-  modifyStructureAnalysis (fun s => { s with uninteresting := s.uninteresting.insert n })
+def markInterestingEnum (n : Name) : PreProcessM Unit := do
+  modifyTypeAnalysis (fun s => { s with interestingEnums := s.interestingEnums.insert n })
 
+@[inline]
+def markUninterestingType (n : Name) : PreProcessM Unit := do
+  modifyTypeAnalysis (fun s => { s with uninteresting := s.uninteresting.insert n })
 
+@[inline]
 def run (cfg : BVDecideConfig) (goal : MVarId) (x : PreProcessM α) : MetaM α := do
   let hyps ← goal.withContext do getPropHyps
   ReaderT.run x cfg |>.run' { rewriteCache := Std.HashSet.empty hyps.size }
@@ -94,6 +107,7 @@ structure Pass where
 
 namespace Pass
 
+@[inline]
 def run (pass : Pass) (goal : MVarId) : PreProcessM (Option MVarId) := do
   withTraceNode `bv (fun _ => return m!"Running pass: {pass.name} on\n{goal}") do
     pass.run' goal

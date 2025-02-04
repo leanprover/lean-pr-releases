@@ -30,7 +30,7 @@ open Lean.Meta
 partial def structuresPass : Pass where
   name := `structures
   run' goal := do
-    let interesting := (← PreProcessM.getStructureAnalysis).interesting
+    let interesting := (← PreProcessM.getTypeAnalysis).interestingStructures
     let goals ← goal.casesRec fun decl => do
       if decl.isLet || decl.isImplementationDetail then
         return false
