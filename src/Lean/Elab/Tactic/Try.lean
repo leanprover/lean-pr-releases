@@ -65,8 +65,8 @@ private def tryGrind : M Bool := do
 private def collect : M Try.Info := do
   Try.collect (← read).mvarId (← read).config
 
-private def toIdent (declName : Name) : MetaM Ident := do
-  return mkIdent (← unresolveNameGlobalAvoidingLocals declName)
+private def toIdent (declName : Name) : TermElabM Ident := do
+  return mkIdent (← Term.unresolveNameGlobalAvoidingLocals declName)
 
 inductive TacticKind where
   | exec

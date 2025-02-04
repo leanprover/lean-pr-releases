@@ -361,7 +361,7 @@ If `stx` is the syntax of a `simp`, `simp_all` or `dsimp` tactic invocation, and
 creates the syntax of an equivalent `simp only`, `simp_all only` or `dsimp only`
 invocation.
 -/
-def mkSimpOnly (stx : Syntax) (usedSimps : Simp.UsedSimps) : MetaM Syntax := do
+def mkSimpOnly (stx : Syntax) (usedSimps : Simp.UsedSimps) : TermElabM Syntax := do
   let isSimpAll := stx.isOfKind ``Parser.Tactic.simpAll
   let mut stx := stx
   if stx[3].isNone then
@@ -376,7 +376,7 @@ def mkSimpOnly (stx : Syntax) (usedSimps : Simp.UsedSimps) : MetaM Syntax := do
       if env.contains declName
          && (inv || !simpOnlyBuiltins.contains declName)
          && !Match.isMatchEqnTheorem env declName then
-        let decl : Term ← `($(mkIdent (← unresolveNameGlobalAvoidingLocals declName)):ident)
+        let decl : Term ← `($(mkIdent (← Term.unresolveNameGlobalAvoidingLocals declName)):ident)
         let arg ← match post, inv with
           | true,  true  => `(Parser.Tactic.simpLemma| ← $decl:term)
           | true,  false => `(Parser.Tactic.simpLemma| $decl:term)
@@ -415,7 +415,7 @@ def mkSimpOnly (stx : Syntax) (usedSimps : Simp.UsedSimps) : MetaM Syntax := do
   let argsStx := if args.isEmpty then #[] else #[mkAtom "[", (mkAtom ",").mkSep args, mkAtom "]"]
   return stx.setArg 4 (mkNullNode argsStx)
 
-def traceSimpCall (stx : Syntax) (usedSimps : Simp.UsedSimps) : MetaM Unit := do
+def traceSimpCall (stx : Syntax) (usedSimps : Simp.UsedSimps) : TermElabM Unit := do
   logInfoAt stx[0] m!"Try this: {← mkSimpOnly stx usedSimps}"
 
 /--
